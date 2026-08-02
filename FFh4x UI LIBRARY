@@ -4,6 +4,7 @@
 -- NOVO: Fechamento automático de dropdowns ao trocar aba ou selecionar opção
 -- CORRIGIDO: Sistema de Tabs com ScrollingFrame funcional
 -- REMOVIDO: Sistema "Both" para simplificação do layout
+-- FIX: Todas as barras de scroll removidas (ScrollBarThickness = 0)
 
 local Library = {
     Flags = {},
@@ -211,11 +212,12 @@ function Library:CreateWindow(options)
     TabsScrolling.BackgroundTransparency = 1  
     TabsScrolling.Position = UDim2.new(0, 26, 0, 106)  
     TabsScrolling.Size = UDim2.new(0, 60, 0, 180)  
-    TabsScrolling.ScrollBarThickness = 0  
+    TabsScrolling.ScrollBarThickness = 0 -- BARRA REMOVIDA
     TabsScrolling.ElasticBehavior = Enum.ElasticBehavior.Never  
     TabsScrolling.Visible = false  
     TabsScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)  
-    TabsScrolling.ScrollingEnabled = true -- GARANTIR QUE O SCROLL ESTÁ HABILITADO
+    TabsScrolling.ScrollingEnabled = true
+    TabsScrolling.ScrollBarImageTransparency = 1 -- BARRA TRANSPARENTE
     RegisterScrollingFrame(TabsScrolling)  
 
     local TabsScrollListLayout = Instance.new("UIListLayout")  
@@ -223,7 +225,6 @@ function Library:CreateWindow(options)
     TabsScrollListLayout.SortOrder = Enum.SortOrder.LayoutOrder  
     TabsScrollListLayout.Padding = UDim.new(0, 4)  
 
-    -- FUNÇÃO PARA ATUALIZAR O CANVAS SIZE DO TABSSCROLLING
     local function UpdateTabsCanvas()
         if TabsScrolling.Visible then
             local contentHeight = TabsScrollListLayout.AbsoluteContentSize.Y
@@ -231,7 +232,6 @@ function Library:CreateWindow(options)
         end
     end
 
-    -- CONECTAR O EVENTO DE MUDANÇA DO ABSOLUTECONTENTSIZE
     TabsScrollListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateTabsCanvas)
 
     local Container = Instance.new("Frame")  
@@ -255,14 +255,12 @@ function Library:CreateWindow(options)
         ScreenGui = ScreenGui
     }  
 
-    -- FUNÇÃO PARA ATUALIZAR VISIBILIDADE DAS TABS
     local function UpdateTabsVisibility()
         local shouldUseScrolling = Window.Count > 3
         
         if shouldUseScrolling then
             TabsContainer.Visible = false
             TabsScrolling.Visible = true
-            -- Mover todas as tabs do Container para o ScrollingFrame
             for _, child in ipairs(TabsContainer:GetChildren()) do
                 if child:IsA("ImageButton") then
                     child.Parent = TabsScrolling
@@ -273,7 +271,6 @@ function Library:CreateWindow(options)
         else
             TabsContainer.Visible = true
             TabsScrolling.Visible = false
-            -- Mover todas as tabs do ScrollingFrame para o Container
             for _, child in ipairs(TabsScrolling:GetChildren()) do
                 if child:IsA("ImageButton") then
                     child.Parent = TabsContainer
@@ -297,14 +294,12 @@ function Library:CreateWindow(options)
         local TabCorner = Instance.new("UICorner")  
         TabCorner.Parent = TabButton  
 
-        -- DECIDIR ONDE COLOCAR O BOTÃO BASEADO NA CONTAGEM ATUAL
         if Window.Count > 3 then
             TabButton.Parent = TabsScrolling
         else
             TabButton.Parent = TabsContainer
         end
 
-        -- ATUALIZAR VISIBILIDADE
         UpdateTabsVisibility()
 
         local Page = Instance.new("Frame")  
@@ -319,12 +314,12 @@ function Library:CreateWindow(options)
         ContentFrame.Parent = Page  
         ContentFrame.BackgroundTransparency = 1  
         ContentFrame.Size = UDim2.new(1, 0, 1, 0)  
-        ContentFrame.ScrollBarThickness = 2  
-        ContentFrame.ScrollBarImageColor3 = Library.Theme.Accent  
+        ContentFrame.ScrollBarThickness = 0 -- BARRA REMOVIDA
         ContentFrame.ElasticBehavior = Enum.ElasticBehavior.Never  
         ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)  
         ContentFrame.BorderSizePixel = 0  
-        ContentFrame.ScrollingEnabled = true -- GARANTIR QUE O SCROLL ESTÁ HABILITADO
+        ContentFrame.ScrollingEnabled = true
+        ContentFrame.ScrollBarImageTransparency = 1 -- BARRA TRANSPARENTE
         RegisterScrollingFrame(ContentFrame)  
 
         local Tab = {  
@@ -344,11 +339,11 @@ function Library:CreateWindow(options)
                 main.BackgroundColor3 = Library.Theme.Section  
                 main.BorderSizePixel = 0  
                 main.Size = UDim2.new(0, 204, 0, 350)  
-                main.ScrollBarThickness = 2  
-                main.ScrollBarImageColor3 = Library.Theme.Accent  
+                main.ScrollBarThickness = 0 -- BARRA REMOVIDA
                 main.ElasticBehavior = Enum.ElasticBehavior.Never  
                 main.CanvasSize = UDim2.new(0, 0, 0, 0)  
-                main.ScrollingEnabled = true -- GARANTIR QUE O SCROLL ESTÁ HABILITADO
+                main.ScrollingEnabled = true
+                main.ScrollBarImageTransparency = 1 -- BARRA TRANSPARENTE
                 RegisterScrollingFrame(main)  
 
                 local corner = Instance.new("UICorner")  
@@ -1001,10 +996,10 @@ function Library:CreateWindow(options)
             ListScrolling.Position = UDim2.new(0, 5, 0, 30)  
             ListScrolling.Size = UDim2.new(1, -10, 1, -35)  
             ListScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)  
-            ListScrolling.ScrollBarThickness = 2  
-            ListScrolling.ScrollBarImageColor3 = Library.Theme.Accent  
+            ListScrolling.ScrollBarThickness = 0 -- BARRA REMOVIDA
             ListScrolling.ElasticBehavior = Enum.ElasticBehavior.Never  
-            ListScrolling.ScrollingEnabled = true -- GARANTIR QUE O SCROLL ESTÁ HABILITADO
+            ListScrolling.ScrollingEnabled = true
+            ListScrolling.ScrollBarImageTransparency = 1 -- BARRA TRANSPARENTE
             RegisterScrollingFrame(ListScrolling)
 
             local ListLayout = Instance.new("UIListLayout")  
