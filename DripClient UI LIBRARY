@@ -346,7 +346,258 @@ function Library:Tab(name)
         
         return slider
     end
-    
+
+    -- Novo componente: TextLabel
+    function tab:TextLabel(text, sizeX, sizeY)
+        local label = {}
+        
+        local TextLabelFrame = Instance.new("Frame")
+        TextLabelFrame.Name = "TextLabelFrame"
+        TextLabelFrame.Size = UDim2.new(0, sizeX or 500, 0, sizeY or 24)
+        TextLabelFrame.BackgroundTransparency = 1
+        TextLabelFrame.Parent = tab.Main
+
+        local Label = Instance.new("TextLabel")
+        Label.Name = "Label"
+        Label.Size = UDim2.new(1, 0, 1, 0)
+        Label.Text = text
+        Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Label.TextSize = 16
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.BackgroundTransparency = 1
+        Label.FontFace = Font.new("rbxasset://fonts/families/HighwayGothic.json")
+        Label.Parent = TextLabelFrame
+
+        label.Instance = TextLabelFrame
+        label.Label = Label
+
+        return label
+    end
+
+    -- Novo componente: Button
+    function tab:Button(text, callback)
+        local button = {}
+        callback = callback or function() end
+
+        local ButtonInstance = Instance.new("TextButton")
+        ButtonInstance.Name = "Button"
+        ButtonInstance.Size = UDim2.new(0, 150, 0, 36)
+        ButtonInstance.BackgroundColor3 = Color3.fromRGB(44, 44, 44)
+        ButtonInstance.Text = text
+        ButtonInstance.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ButtonInstance.TextSize = 18
+        ButtonInstance.FontFace = Font.new("rbxasset://fonts/families/HighwayGothic.json")
+        ButtonInstance.Parent = tab.Main
+
+        Instance.new("UICorner", ButtonInstance).CornerRadius = UDim.new(0, 5)
+        local ButtonStroke = Instance.new("UIStroke", ButtonInstance)
+        ButtonStroke.Transparency = 0.7
+        ButtonStroke.Color = Color3.fromRGB(255, 255, 255)
+
+        ButtonInstance.MouseButton1Click:Connect(function()
+            TweenService:Create(ButtonInstance, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(172, 51, 255) }):Play()
+            task.wait(0.1)
+            TweenService:Create(ButtonInstance, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(44, 44, 44) }):Play()
+            callback()
+        end)
+
+        button.Instance = ButtonInstance
+
+        return button
+    end
+
+    -- Novo componente: Separator
+    function tab:Separator()
+        local separator = {}
+
+        local SeparatorFrame = Instance.new("Frame")
+        SeparatorFrame.Name = "Separator"
+        SeparatorFrame.Size = UDim2.new(1, 0, 0, 2) -- Full width, 2 pixels height
+        SeparatorFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60) -- Slightly lighter gray
+        SeparatorFrame.BorderSizePixel = 0
+        SeparatorFrame.Parent = tab.Main
+
+        separator.Instance = SeparatorFrame
+
+        return separator
+    end
+
+    -- Novo componente: Section
+    function tab:Section(titleText)
+        local section = {}
+
+        local SectionFrame = Instance.new("Frame")
+        SectionFrame.Name = "Section"
+        SectionFrame.Size = UDim2.new(1, 0, 0, 50) -- Placeholder height, will adjust with AutomaticSize
+        SectionFrame.BackgroundTransparency = 1
+        SectionFrame.Parent = tab.Main
+
+        local SectionLayout = Instance.new("UIListLayout", SectionFrame)
+        SectionLayout.Padding = UDim.new(0, 8)
+        SectionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        SectionLayout.FillDirection = Enum.FillDirection.Vertical
+
+        local SectionPadding = Instance.new("UIPadding", SectionFrame)
+        SectionPadding.PaddingTop = UDim.new(0, 5)
+        SectionPadding.PaddingBottom = UDim.new(0, 5)
+        SectionPadding.PaddingLeft = UDim.new(0, 5)
+        SectionPadding.PaddingRight = UDim.new(0, 5)
+
+        if titleText then
+            local Title = Instance.new("TextLabel")
+            Title.Name = "Title"
+            Title.Size = UDim2.new(1, 0, 0, 20)
+            Title.Text = titleText
+            Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+            Title.TextSize = 18
+            Title.TextXAlignment = Enum.TextXAlignment.Left
+            Title.BackgroundTransparency = 1
+            Title.FontFace = Font.new("rbxasset://fonts/families/HighwayGothic.json")
+            Title.Parent = SectionFrame
+        end
+
+        -- Adjust SectionFrame size based on content
+        SectionLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            SectionFrame.Size = UDim2.new(1, 0, 0, SectionLayout.AbsoluteContentSize.Y + SectionPadding.PaddingTop.Offset + SectionPadding.PaddingBottom.Offset)
+        end)
+
+        section.Instance = SectionFrame
+        section.Layout = SectionLayout
+
+        return section
+    end
+
+    -- Novo componente: TextBox
+    function tab:TextBox(text, default, callback)
+        local textbox = {}
+        default = default or ""
+        callback = callback or function() end
+
+        local TextBoxFrame = Instance.new("Frame")
+        TextBoxFrame.Name = "TextBoxFrame"
+        TextBoxFrame.Size = UDim2.new(0, 500, 0, 30)
+        TextBoxFrame.BackgroundTransparency = 1
+        TextBoxFrame.Parent = tab.Main
+
+        local Box = Instance.new("TextBox")
+        Box.Name = "Box"
+        Box.Size = UDim2.new(1, 0, 1, 0)
+        Box.BackgroundColor3 = Color3.fromRGB(44, 44, 44)
+        Box.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Box.TextSize = 16
+        Box.TextXAlignment = Enum.TextXAlignment.Left
+        Box.PlaceholderText = text
+        Box.Text = default
+        Box.BackgroundTransparency = 0
+        Box.ClearTextOnFocus = false
+        Box.FontFace = Font.new("rbxasset://fonts/families/HighwayGothic.json")
+        Box.Parent = TextBoxFrame
+
+        Instance.new("UICorner", Box).CornerRadius = UDim.new(0, 5)
+        local BoxStroke = Instance.new("UIStroke", Box)
+        BoxStroke.Transparency = 0.7
+        BoxStroke.Color = Color3.fromRGB(255, 255, 255)
+
+        Box.FocusLost:Connect(function(enterPressed)
+            callback(Box.Text, enterPressed)
+        end)
+
+        textbox.Instance = TextBoxFrame
+        textbox.Box = Box
+
+        return textbox
+    end
+
+    -- Novo componente: Dropdown
+    function tab:Dropdown(text, options, default, callback)
+        local dropdown = {}
+        options = options or {}
+        default = default or (options[1] or "")
+        callback = callback or function() end
+
+        local DropdownFrame = Instance.new("Frame")
+        DropdownFrame.Name = "DropdownFrame"
+        DropdownFrame.Size = UDim2.new(0, 200, 0, 30)
+        DropdownFrame.BackgroundTransparency = 1
+        DropdownFrame.Parent = tab.Main
+
+        local DropdownButton = Instance.new("TextButton")
+        DropdownButton.Name = "DropdownButton"
+        DropdownButton.Size = UDim2.new(1, 0, 1, 0)
+        DropdownButton.BackgroundColor3 = Color3.fromRGB(44, 44, 44)
+        DropdownButton.Text = default
+        DropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        DropdownButton.TextSize = 16
+        DropdownButton.TextXAlignment = Enum.TextXAlignment.Left
+        DropdownButton.BackgroundTransparency = 0
+        DropdownButton.FontFace = Font.new("rbxasset://fonts/families/HighwayGothic.json")
+        DropdownButton.Parent = DropdownFrame
+
+        Instance.new("UICorner", DropdownButton).CornerRadius = UDim.new(0, 5)
+        local ButtonStroke = Instance.new("UIStroke", DropdownButton)
+        ButtonStroke.Transparency = 0.7
+        ButtonStroke.Color = Color3.fromRGB(255, 255, 255)
+
+        local OptionsFrame = Instance.new("ScrollingFrame")
+        OptionsFrame.Name = "OptionsFrame"
+        OptionsFrame.Size = UDim2.new(1, 0, 0, math.min(#options * 25, 150)) -- Max height 150, each option 25
+        OptionsFrame.Position = UDim2.new(0, 0, 1, 5) -- Below the button
+        OptionsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        OptionsFrame.BorderSizePixel = 0
+        OptionsFrame.Visible = false
+        OptionsFrame.ZIndex = 2 -- Ensure it's above other elements
+        OptionsFrame.Parent = DropdownFrame
+        OptionsFrame.ScrollBarThickness = 6
+        OptionsFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+        OptionsFrame.CanvasSize = UDim2.new(0,0,0, #options * 25)
+
+        Instance.new("UICorner", OptionsFrame).CornerRadius = UDim.new(0, 5)
+        local OptionsStroke = Instance.new("UIStroke", OptionsFrame)
+        OptionsStroke.Transparency = 0.7
+        OptionsStroke.Color = Color3.fromRGB(255, 255, 255)
+
+        local OptionsLayout = Instance.new("UIListLayout", OptionsFrame)
+        OptionsLayout.FillDirection = Enum.FillDirection.Vertical
+        OptionsLayout.Padding = UDim.new(0, 2)
+
+        for i, optionText in ipairs(options) do
+            local OptionButton = Instance.new("TextButton")
+            OptionButton.Name = "Option_" .. i
+            OptionButton.Size = UDim2.new(1, 0, 0, 20)
+            OptionButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            OptionButton.Text = optionText
+            OptionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            OptionButton.TextSize = 14
+            OptionButton.TextXAlignment = Enum.TextXAlignment.Left
+            OptionButton.BackgroundTransparency = 0
+            OptionButton.FontFace = Font.new("rbxasset://fonts/families/HighwayGothic.json")
+            OptionButton.Parent = OptionsFrame
+
+            OptionButton.MouseEnter:Connect(function()
+                TweenService:Create(OptionButton, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(60, 60, 60) }):Play()
+            end)
+            OptionButton.MouseLeave:Connect(function()
+                TweenService:Create(OptionButton, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(30, 30, 30) }):Play()
+            end)
+
+            OptionButton.MouseButton1Click:Connect(function()
+                DropdownButton.Text = optionText
+                OptionsFrame.Visible = false
+                callback(optionText)
+            end)
+        end
+
+        DropdownButton.MouseButton1Click:Connect(function()
+            OptionsFrame.Visible = not OptionsFrame.Visible
+        end)
+
+        dropdown.Instance = DropdownFrame
+        dropdown.Button = DropdownButton
+        dropdown.OptionsFrame = OptionsFrame
+
+        return dropdown
+    end
+
     return tab
 end
 
