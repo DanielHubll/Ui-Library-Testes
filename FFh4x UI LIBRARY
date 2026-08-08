@@ -1,10 +1,10 @@
--- FFh4x UI Library (Corrigido - Config Tab em Último + Interface de Cores Melhorada)
--- Sistema de Mains dinâmicos + Auto-height + Sem efeito elástico + Bloqueio de Slider
--- CORRIGIDO: Tab Config sempre aparece por último
--- MELHORADO: Interface de configuração de cores com ícones e descrições
+-- FFh4x UI Library (v2.0 - Config System Refactored)
+-- Sistema completo de Config: Flags + Theme + Tabs + Meta
+-- Config sempre em último, ordenação automática, salvamento completo
 
 local Library = {
     Flags = {},
+    
     Theme = {
         Main = Color3.fromRGB(0, 0, 0),
         Accent = Color3.fromRGB(255, 0, 0),
@@ -12,27 +12,30 @@ local Library = {
         Text = Color3.fromRGB(255, 255, 255),
         SecondaryText = Color3.fromRGB(200, 200, 200),
         DarkText = Color3.fromRGB(150, 150, 150),
-        -- Cores para textos específicos
-        SectionText = Color3.fromRGB(255, 0, 0),      -- Texto das Sections
-        PrimaryText = Color3.fromRGB(255, 255, 255),  -- Texto dos componentes (toggle, slider, etc)
-        SecondaryTextColor = Color3.fromRGB(200, 200, 200), -- Texto de bodypart e playerlist
-        -- Cores para fundo
-        MenuBackground = Color3.fromRGB(0, 0, 0),     -- Cor de fundo do menu
-        MainBackground = Color3.fromRGB(26, 26, 26),  -- Cor de fundo dos mains
-        -- Cor para dropdown
-        DropdownBackground = Color3.fromRGB(36, 36, 36), -- Cor de fundo dos dropdowns
+        
+        SectionText = Color3.fromRGB(255, 0, 0),
+        PrimaryText = Color3.fromRGB(255, 255, 255),
+        SecondaryTextColor = Color3.fromRGB(200, 200, 200),
+        
+        MenuBackground = Color3.fromRGB(0, 0, 0),
+        MainBackground = Color3.fromRGB(26, 26, 26),
     },
+    
     Connections = {},
     Tabs = {},
+    TabDefinitions = {}, -- NOVO: Registro de definições das tabs
+    
     CurrentTab = nil,
+    ConfigTab = nil,
+    CurrentScreenGui = nil,
+    
     IsDraggingSlider = false,
     IsDraggingColorPicker = false,
     IsDraggingWindow = false,
+    
     ScrollFrames = {},
     OpenDropdowns = {},
-    ConfigTab = nil,
-    CurrentScreenGui = nil,
-    -- Registro de todos os componentes para atualização
+    
     Components = {
         Toggles = {},
         Sliders = {},
@@ -53,7 +56,7 @@ local LocalPlayer = game:GetService("Players").LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
 -- =========================================================
--- CONFIG SYSTEM - JSON + LOCAL FILES
+-- CONFIG SYSTEM - JSON + LOCAL FILES (VERSÃO 2.0)
 -- =========================================================
 
 local ConfigFolder = "FFh4xConfigs"
@@ -72,6 +75,7 @@ EnsureConfigFolder()
 
 local function SerializeValue(value)
     local valueType = typeof(value)
+    
     if valueType == "Color3" then
         return {
             __type = "Color3",
@@ -106,6 +110,7 @@ local function DeserializeValue(value)
     if type(value) ~= "table" then
         return value
     end
+    
     if value.__type == "Color3" then
         return Color3.new(
             tonumber(value.R) or 1,
@@ -125,6 +130,7 @@ local function DeserializeValue(value)
         end
         return nil
     end
+    
     local result = {}
     for k, v in pairs(value) do
         result[k] = DeserializeValue(v)
@@ -132,97 +138,353 @@ local function DeserializeValue(value)
     return result
 end
 
-local function EncodeConfig(data)
-    local serialized = SerializeValue(data)
-    local success, json = pcall(function()
-        return HttpService:JSONEncode(serialized)
+-- =========================================================
+-- NOVO SISTEMA DE CONFIG COMPLETA
+-- =========================================================
+
+local function BuildConfigData()
+    local data = {
+        Version = 2,
+        Flags = {},
+        Theme = {},
+        Tabs = {},
+        Meta = {
+            Logo = nil
+        }
+    }
+    
+    -- FLAGS
+    for flag, value in pairs(Library.Flags) do
+        data.Flags[flag] = SerializeValue(value)
+    end
+    
+    -- THEME
+    for name, color in pairs(Library.Theme) do
+        if typeof(color) == "Color3" then
+            data.Theme[name] = SerializeValue(color)
+        end
+    end
+    
+    -- LOGO
+    local gui = Library.CurrentScreenGui
+    if gui then
+        local painel = gui:FindFirstChild("Painel")
+        if painel then
+            local right = painel:FindFirstChild("Right")
+            if right then
+                local logo = right:FindFirstChild("Logo")
+                if logo and logo:IsA("ImageLabel") then
+                    data.Meta.Logo = logo.Image
+                end
+            end
+        end
+    end
+    
+    -- TABS
+    for _, tabData in ipairs(Library.TabDefinitions) do
+        table.insert(data.Tabs, {
+            Name = tabData.Name,
+            Icon = tabData.Icon,
+            LayoutOrder = tabData.LayoutOrder
+        })
+    end
+    
+    return data
+end
+
+local function DecodeCompleteConfig(json)
+    local success, raw = pcall(function()
+        return HttpService:JSONDecode(json)
     end)
+    
+    if not success or type(raw) ~= "table" then
+        return nil
+    end
+    
+    -- CONFIG NOVA (v2)
+    if raw.Version then
+        local result = {
+            Version = raw.Version,
+            Flags = {},
+            Theme = {},
+            Tabs = raw.Tabs or {},
+            Meta = raw.Meta or {}
+        }
+        
+        for flag, value in pairs(raw.Flags or {}) do
+            result.Flags[flag] = DeserializeValue(value)
+        end
+        
+        for name, value in pairs(raw.Theme or {}) do
+            result.Theme[name] = DeserializeValue(value)
+        end
+        
+        return result
+    end
+    
+    -- COMPATIBILIDADE COM CONFIG ANTIGA (v1)
+    local old = {}
+    for flag, value in pairs(raw) do
+        old[flag] = DeserializeValue(value)
+    end
+    
+    return {
+        Version = 1,
+        Flags = old,
+        Theme = {},
+        Tabs = {},
+        Meta = {}
+    }
+end
+
+local function EncodeCompleteConfig()
+    local data = BuildConfigData()
+    local success, json = pcall(function()
+        return HttpService:JSONEncode(data)
+    end)
+    
     if success then
         return json
     end
-    warn("FFh4x: Erro ao converter config para JSON:", json)
+    
+    warn("FFh4x: erro ao gerar JSON:", json)
     return "{}"
 end
 
-local function DecodeConfig(json)
-    local success, data = pcall(function()
-        return HttpService:JSONDecode(json)
-    end)
-    if not success or type(data) ~= "table" then
-        return nil
+-- =========================================================
+-- NOVO APPLY COMPLETE CONFIG
+-- =========================================================
+
+local function ApplyCompleteConfig(data)
+    if type(data) ~= "table" then
+        return false
     end
-    return DeserializeValue(data)
-end
-
-local function GetConfigPath(name)
-    name = tostring(name or ""):gsub("[^%w_%-%s]", ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if name == "" then return nil end
-    return ConfigFolder .. "/" .. name .. ".json"
-end
-
-local function SaveLocalConfig(name, data)
-    if not writefile then return false, "writefile não disponível" end
-    EnsureConfigFolder()
-    local path = GetConfigPath(name)
-    if not path then return false, "Nome inválido" end
-    local json = EncodeConfig(data)
-    local success, err = pcall(function() writefile(path, json) end)
-    if not success then return false, tostring(err) end
+    
+    -- FLAGS
+    local flags = data.Flags or {}
+    for flag, value in pairs(flags) do
+        Library.Flags[flag] = value
+    end
+    
+    -- THEME
+    local theme = data.Theme or {}
+    for themeName, value in pairs(theme) do
+        if Library.Theme[themeName] ~= nil and typeof(value) == "Color3" then
+            Library.Theme[themeName] = value
+        end
+    end
+    
+    -- LOGO
+    local gui = Library.CurrentScreenGui
+    if gui and data.Meta then
+        local logoId = data.Meta.Logo
+        if logoId then
+            local painel = gui:FindFirstChild("Painel")
+            if painel then
+                local right = painel:FindFirstChild("Right")
+                if right then
+                    local logo = right:FindFirstChild("Logo")
+                    if logo and logo:IsA("ImageLabel") then
+                        logo.Image = tostring(logoId)
+                    end
+                end
+            end
+        end
+    end
+    
+    -- COMPONENTES
+    for _, component in ipairs(Library.Components.Toggles) do
+        local value = Library.Flags[component.Flag]
+        if value ~= nil and component.UpdateFn then
+            pcall(component.UpdateFn, value, true)
+        end
+    end
+    
+    for _, component in ipairs(Library.Components.Sliders) do
+        local value = Library.Flags[component.Flag]
+        if value ~= nil and component.UpdateFn then
+            pcall(component.UpdateFn, value, true)
+        end
+    end
+    
+    for _, component in ipairs(Library.Components.Dropdowns) do
+        local value = Library.Flags[component.Flag]
+        if value ~= nil and component.UpdateFn then
+            pcall(component.UpdateFn, value, true)
+        end
+    end
+    
+    for _, component in ipairs(Library.Components.Keybinds) do
+        local value = Library.Flags[component.Flag]
+        if value ~= nil and component.UpdateFn then
+            pcall(component.UpdateFn, value, true)
+        end
+    end
+    
+    for _, component in ipairs(Library.Components.ColorPickers) do
+        local value = Library.Flags[component.Flag]
+        if typeof(value) == "Color3" and component.UpdateFn then
+            pcall(component.UpdateFn, value, true)
+        end
+    end
+    
+    for _, component in ipairs(Library.Components.Textboxes) do
+        local value = Library.Flags[component.Flag]
+        if value ~= nil and component.UpdateFn then
+            pcall(component.UpdateFn, value, true)
+        end
+    end
+    
+    for _, component in ipairs(Library.Components.BodyParts) do
+        local value = Library.Flags[component.Flag]
+        if value ~= nil and component.UpdateFn then
+            pcall(component.UpdateFn, value, true)
+        end
+    end
+    
+    for _, component in ipairs(Library.Components.MultiColorPickers) do
+        local value = Library.Flags[component.Flag]
+        if type(value) == "table" and component.UpdateFn then
+            pcall(component.UpdateFn, value, true)
+        end
+    end
+    
+    -- CORES
+    ApplyThemeColors()
+    
+    -- LAYOUT
+    for _, tab in ipairs(Library.Tabs) do
+        if tab.UpdateLayout then
+            pcall(function()
+                tab:UpdateLayout()
+            end)
+        end
+    end
+    
     return true
 end
 
-local function LoadLocalConfig(name)
-    if not readfile or not isfile then return nil end
+-- Compatibilidade com sistema antigo
+local function ApplyLoadedConfig(data)
+    if type(data) ~= "table" then
+        return false
+    end
+    
+    -- Converte formato antigo para novo
+    local completeData = {
+        Version = 1,
+        Flags = data,
+        Theme = {},
+        Tabs = {},
+        Meta = {}
+    }
+    
+    return ApplyCompleteConfig(completeData)
+end
+
+-- =========================================================
+-- SISTEMA DE ARQUIVOS LOCAIS (ATUALIZADO)
+-- =========================================================
+
+local function GetConfigPath(name)
+    name = tostring(name or "")
+    name = name:gsub("[^%w_%-%s]", "")
+    name = name:gsub("^%s+", "")
+    name = name:gsub("%s+$", "")
+    
+    if name == "" then
+        return nil
+    end
+    
+    return ConfigFolder .. "/" .. name .. ".json"
+end
+
+local function SaveCompleteConfig(name, data)
+    if not writefile then
+        return false, "writefile não disponível"
+    end
+    
+    EnsureConfigFolder()
+    
     local path = GetConfigPath(name)
-    if not path or not isfile(path) then return nil end
-    local success, content = pcall(function() return readfile(path) end)
-    if not success then return nil end
-    return DecodeConfig(content)
+    if not path then
+        return false, "Nome inválido"
+    end
+    
+    local json = EncodeCompleteConfig()
+    local success, err = pcall(function()
+        writefile(path, json)
+    end)
+    
+    if not success then
+        return false, tostring(err)
+    end
+    
+    return true
+end
+
+local function LoadCompleteConfig(name)
+    if not readfile or not isfile then
+        return nil
+    end
+    
+    local path = GetConfigPath(name)
+    if not path or not isfile(path) then
+        return nil
+    end
+    
+    local success, content = pcall(function()
+        return readfile(path)
+    end)
+    
+    if not success then
+        return nil
+    end
+    
+    return DecodeCompleteConfig(content)
 end
 
 local function GetConfigNames()
     local result = {}
-    if not listfiles then return result end
+    
+    if not listfiles then
+        return result
+    end
+    
     EnsureConfigFolder()
-    local success, files = pcall(function() return listfiles(ConfigFolder) end)
-    if not success or type(files) ~= "table" then return result end
+    
+    local success, files = pcall(function()
+        return listfiles(ConfigFolder)
+    end)
+    
+    if not success or type(files) ~= "table" then
+        return result
+    end
+    
     for _, path in ipairs(files) do
         local filename = tostring(path):match("([^/\\]+)%.json$")
-        if filename then table.insert(result, filename) end
+        if filename then
+            table.insert(result, filename)
+        end
     end
+    
     table.sort(result)
     return result
 end
 
 local function DeleteLocalConfig(name)
-    if not delfile then return false end
-    local path = GetConfigPath(name)
-    if not path or not isfile or not isfile(path) then return false end
-    return pcall(function() delfile(path) end)
-end
-
--- Compatibilidade com sistema antigo
-local ConfigDataStore = {}
-
-local function SaveToDataStore(data)
-    ConfigDataStore = SerializeValue(data)
-end
-
-local function LoadFromDataStore()
-    return DeserializeValue(ConfigDataStore)
-end
-
-local function ExportConfigJSON()
-    return EncodeConfig(Library.Flags)
-end
-
-local function ImportConfigJSON(jsonString)
-    local data = DecodeConfig(jsonString)
-    if data then
-        ConfigDataStore = data
-        return true, data
+    if not delfile then
+        return false
     end
-    return false
+    
+    local path = GetConfigPath(name)
+    if not path or not isfile or not isfile(path) then
+        return false
+    end
+    
+    return pcall(function()
+        delfile(path)
+    end)
 end
 
 -- =========================================================
@@ -238,6 +500,7 @@ end
 local function ApplyAccentColor()
     local gui = Library.CurrentScreenGui
     if not gui then return end
+    
     for _, object in ipairs(gui:GetDescendants()) do
         if object:GetAttribute("FFh4xAccent") then
             if object:IsA("Frame") or object:IsA("TextButton") or object:IsA("ImageButton") then
@@ -255,13 +518,13 @@ end
 local function ApplyThemeColors()
     local gui = Library.CurrentScreenGui
     if not gui then return end
-
+    
     -- Atualiza o fundo do menu (Painel)
     local painel = gui:FindFirstChild("Painel")
     if painel then
         painel.BackgroundColor3 = Library.Theme.MenuBackground
     end
-
+    
     -- Atualiza texto de todos os elementos
     for _, object in ipairs(gui:GetDescendants()) do
         if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
@@ -274,14 +537,8 @@ local function ApplyThemeColors()
                 object.TextColor3 = Library.Theme.SecondaryTextColor
             end
         end
-        -- Atualiza fundo de dropdowns
-        if object:GetAttribute("FFh4xDropdownBg") then
-            if object:IsA("Frame") then
-                object.BackgroundColor3 = Library.Theme.DropdownBackground
-            end
-        end
     end
-
+    
     -- Atualiza o fundo dos mains
     for _, tabData in pairs(Library.Tabs) do
         if tabData.Mains then
@@ -292,113 +549,9 @@ local function ApplyThemeColors()
             end
         end
     end
-
+    
+    -- Aplica cores de Accent
     ApplyAccentColor()
-end
-
--- =========================================================
--- FUNÇÃO ApplyLoadedConfig
--- =========================================================
-local function ApplyLoadedConfig(data)
-    if type(data) ~= "table" then return false end
-
-    -- 1. Copia os valores para as flags
-    for flag, value in pairs(data) do
-        Library.Flags[flag] = value
-    end
-
-    -- 2. Aplica configurações de tema
-    local ThemeFlags = {
-        Config_MenuBackground = "MenuBackground",
-        Config_MainBackground = "MainBackground",
-        Config_DropdownBackground = "DropdownBackground",
-        Config_SectionText = "SectionText",
-        Config_PrimaryText = "PrimaryText",
-        Config_SecondaryText = "SecondaryTextColor",
-        Config_Accent = "Accent",
-    }
-
-    for flag, themeName in pairs(ThemeFlags) do
-        local value = Library.Flags[flag]
-        if typeof(value) == "Color3" then
-            Library.Theme[themeName] = value
-        end
-    end
-
-    -- 3. Atualiza visualmente e executa callbacks
-    for _, component in ipairs(Library.Components.Toggles) do
-        local value = Library.Flags[component.Flag]
-        if value ~= nil and component.UpdateFn then
-            pcall(component.UpdateFn, value, true)
-        end
-    end
-
-    for _, component in ipairs(Library.Components.Sliders) do
-        local value = Library.Flags[component.Flag]
-        if value ~= nil and component.UpdateFn then
-            pcall(component.UpdateFn, value, true)
-        end
-    end
-
-    for _, component in ipairs(Library.Components.Dropdowns) do
-        local value = Library.Flags[component.Flag]
-        if value ~= nil and component.UpdateFn then
-            pcall(component.UpdateFn, value, true)
-        end
-    end
-
-    for _, component in ipairs(Library.Components.Keybinds) do
-        local value = Library.Flags[component.Flag]
-        if value ~= nil and component.UpdateFn then
-            pcall(component.UpdateFn, value, true)
-        end
-    end
-
-    for _, component in ipairs(Library.Components.ColorPickers) do
-        local value = Library.Flags[component.Flag]
-        if typeof(value) == "Color3" and component.UpdateFn then
-            pcall(component.UpdateFn, value, true)
-        end
-    end
-
-    if Library.Components.Textboxes then
-        for _, component in ipairs(Library.Components.Textboxes) do
-            local value = Library.Flags[component.Flag]
-            if value ~= nil and component.UpdateFn then
-                pcall(component.UpdateFn, value, true)
-            end
-        end
-    end
-
-    if Library.Components.BodyParts then
-        for _, component in ipairs(Library.Components.BodyParts) do
-            local value = Library.Flags[component.Flag]
-            if value ~= nil and component.UpdateFn then
-                pcall(component.UpdateFn, value, true)
-            end
-        end
-    end
-
-    if Library.Components.MultiColorPickers then
-        for _, component in ipairs(Library.Components.MultiColorPickers) do
-            local value = Library.Flags[component.Flag]
-            if type(value) == "table" and component.UpdateFn then
-                pcall(component.UpdateFn, value, true)
-            end
-        end
-    end
-
-    -- 5. Atualiza cores
-    ApplyThemeColors()
-
-    -- 6. Força atualização do layout
-    for _, tab in ipairs(Library.Tabs) do
-        if tab.UpdateLayout then
-            pcall(function() tab:UpdateLayout() end)
-        end
-    end
-
-    return true
 end
 
 -- =========================================================
@@ -470,13 +623,13 @@ local function MakeDraggable(dragObject, mainObject)
     local dragInput = nil
     local dragStart = nil
     local startPos = nil
-
+    
     local function update(input)
         if Library.IsDraggingSlider or Library.IsDraggingColorPicker then return end
         local delta = input.Position - dragStart
         mainObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
-
+    
     dragObject.InputBegan:Connect(function(input)
         if Library.IsDraggingSlider or Library.IsDraggingColorPicker then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -484,6 +637,7 @@ local function MakeDraggable(dragObject, mainObject)
             Library.IsDraggingWindow = true
             dragStart = input.Position
             startPos = mainObject.Position
+            
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -492,19 +646,19 @@ local function MakeDraggable(dragObject, mainObject)
             end)
         end
     end)
-
+    
     dragObject.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
+    
     RegisterInputConnection(function(input)
         if input == dragInput and dragging then
             update(input)
         end
     end)
-
+    
     UserInputService.InputEnded:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
             dragging = false
@@ -520,18 +674,19 @@ function Library:Tween(object, goal, callback)
 end
 
 -- =========================================================
--- CRIAÇÃO DA JANELA
+-- CREATE WINDOW (COM NOVO SISTEMA DE ORDENAÇÃO)
 -- =========================================================
+
 function Library:CreateWindow(options)
     local Title = options.Title or "FFh4x"
-
+    
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "FFh4xGui_" .. HttpService:GenerateGUID(false)
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.Parent = RunService:IsStudio() and game.Players.LocalPlayer.PlayerGui or game:GetService("CoreGui")
-
+    
     Library.CurrentScreenGui = ScreenGui
-
+    
     local Painel = Instance.new("Frame")
     Painel.Name = "Painel"
     Painel.Parent = ScreenGui
@@ -539,11 +694,11 @@ function Library:CreateWindow(options)
     Painel.BorderSizePixel = 0
     Painel.Position = UDim2.new(0.5, -275, 0.5, -186)
     Painel.Size = UDim2.new(0, 550, 0, 372)
-
+    
     local UICorner = Instance.new("UICorner")
     UICorner.CornerRadius = UDim.new(0, 8)
     UICorner.Parent = Painel
-
+    
     local Effect = Instance.new("Frame")
     Effect.Name = "Effect"
     Effect.Parent = Painel
@@ -551,14 +706,14 @@ function Library:CreateWindow(options)
     Effect.BorderSizePixel = 0
     Effect.Position = UDim2.new(0, 108, 0, 0)
     Effect.Size = UDim2.new(0, 2, 0, 372)
-
+    
     local Right = Instance.new("Frame")
     Right.Name = "Right"
     Right.Parent = Painel
     Right.BackgroundTransparency = 1
     Right.Position = UDim2.new(0, -2, 0, 0)
     Right.Size = UDim2.new(0, 110, 0, 372)
-
+    
     local Logo = Instance.new("ImageLabel")
     Logo.Name = "Logo"
     Logo.Parent = Right
@@ -567,21 +722,21 @@ function Library:CreateWindow(options)
     Logo.Size = UDim2.new(0, 100, 0, 100)
     Logo.Image = "rbxassetid://114459453255031"
     Logo.Active = true
-
+    
     MakeDraggable(Logo, Painel)
-
+    
     local TabsContainer = Instance.new("Frame")
     TabsContainer.Name = "Tabs"
     TabsContainer.Parent = Right
     TabsContainer.BackgroundTransparency = 1
     TabsContainer.Position = UDim2.new(0, 26, 0, 106)
     TabsContainer.Size = UDim2.new(0, 60, 0, 240)
-
+    
     local TabsListLayout = Instance.new("UIListLayout")
     TabsListLayout.Parent = TabsContainer
     TabsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
     TabsListLayout.Padding = UDim.new(0, 4)
-
+    
     local TabsScrolling = Instance.new("ScrollingFrame")
     TabsScrolling.Name = "TabsScrolling"
     TabsScrolling.Parent = Right
@@ -595,28 +750,67 @@ function Library:CreateWindow(options)
     TabsScrolling.ScrollingEnabled = true
     TabsScrolling.ScrollBarImageTransparency = 1
     RegisterScrollingFrame(TabsScrolling)
-
+    
     local TabsScrollListLayout = Instance.new("UIListLayout")
     TabsScrollListLayout.Parent = TabsScrolling
     TabsScrollListLayout.SortOrder = Enum.SortOrder.LayoutOrder
     TabsScrollListLayout.Padding = UDim.new(0, 4)
-
+    
+    -- =========================================================
+    -- NOVO SISTEMA DE ORDENAÇÃO AUTOMÁTICA
+    -- =========================================================
+    
+    local function SortTabs()
+        local allButtons = {}
+        
+        for _, child in ipairs(TabsContainer:GetChildren()) do
+            if child:IsA("ImageButton") then
+                table.insert(allButtons, child)
+            end
+        end
+        
+        for _, child in ipairs(TabsScrolling:GetChildren()) do
+            if child:IsA("ImageButton") then
+                table.insert(allButtons, child)
+            end
+        end
+        
+        table.sort(allButtons, function(a, b)
+            -- Config sempre por último
+            if a.Name == "Config" then
+                return false
+            end
+            if b.Name == "Config" then
+                return true
+            end
+            return a.LayoutOrder < b.LayoutOrder
+        end)
+        
+        for index, button in ipairs(allButtons) do
+            if button.Name == "Config" then
+                button.LayoutOrder = 999999
+            else
+                button.LayoutOrder = index
+            end
+        end
+    end
+    
     local function UpdateTabsCanvas()
         if TabsScrolling.Visible then
             local contentHeight = TabsScrollListLayout.AbsoluteContentSize.Y
             TabsScrolling.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
         end
     end
-
+    
     TabsScrollListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateTabsCanvas)
-
+    
     local Container = Instance.new("Frame")
     Container.Name = "Container"
     Container.Parent = Painel
     Container.BackgroundTransparency = 1
     Container.Position = UDim2.new(0, 120, 0, 10)
     Container.Size = UDim2.new(0, 420, 0, 350)
-
+    
     local Visible = true
     UserInputService.InputBegan:Connect(function(input, gpe)
         if not gpe and input.KeyCode == Enum.KeyCode.RightControl then
@@ -624,75 +818,82 @@ function Library:CreateWindow(options)
             Painel.Visible = Visible
         end
     end)
-
+    
     local Window = {
         Tabs = {},
         Count = 0,
-        ScreenGui = ScreenGui,
-        PendingConfigTab = nil, -- Armazena a config tab para criar depois
+        ScreenGui = ScreenGui
     }
-
+    
     local function UpdateTabsVisibility()
+        SortTabs()
+        
         local shouldUseScrolling = Window.Count > 3
+        
         if shouldUseScrolling then
             TabsContainer.Visible = false
             TabsScrolling.Visible = true
+            
             for _, child in ipairs(TabsContainer:GetChildren()) do
                 if child:IsA("ImageButton") then
                     child.Parent = TabsScrolling
                 end
             end
-            task.wait()
-            UpdateTabsCanvas()
+            
+            task.defer(UpdateTabsCanvas)
         else
             TabsContainer.Visible = true
             TabsScrolling.Visible = false
+            
             for _, child in ipairs(TabsScrolling:GetChildren()) do
                 if child:IsA("ImageButton") then
                     child.Parent = TabsContainer
                 end
             end
         end
+        
+        SortTabs()
     end
-
+    
     function Window:CreateTab(tabOptions)
         local TabName = tabOptions.Name or "Tab"
         local TabIcon = tabOptions.Icon or ""
-        local IsConfigTab = tabOptions.IsConfig or false
-
-        -- Se for a tab de configuração, armazena para criar depois
-        if IsConfigTab then
-            Window.PendingConfigTab = tabOptions
-            return nil
-        end
-
         Window.Count = Window.Count + 1
-
+        
         local TabButton = Instance.new("ImageButton")
         TabButton.Name = TabName
         TabButton.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
         TabButton.BorderSizePixel = 0
         TabButton.Size = UDim2.new(0, 60, 0, 58)
         TabButton.Image = TabIcon
-
+        
         local TabCorner = Instance.new("UICorner")
         TabCorner.Parent = TabButton
-
+        
         if Window.Count > 3 then
             TabButton.Parent = TabsScrolling
         else
             TabButton.Parent = TabsContainer
         end
-
+        
+        -- NOVO: Registra definição da tab
+        local TabDefinition = {
+            Name = TabName,
+            Icon = TabIcon,
+            LayoutOrder = Window.Count,
+            IsConfig = false
+        }
+        table.insert(Library.TabDefinitions, TabDefinition)
+        
         UpdateTabsVisibility()
-
+        
         local Page = Instance.new("Frame")
         Page.Name = TabName .. "_Page"
         Page.Parent = Container
         Page.BackgroundTransparency = 1
         Page.Size = UDim2.new(1, 0, 1, 0)
         Page.Visible = false
-
+        
         local ContentFrame = Instance.new("ScrollingFrame")
         ContentFrame.Name = "Content"
         ContentFrame.Parent = Page
@@ -705,19 +906,19 @@ function Library:CreateWindow(options)
         ContentFrame.ScrollingEnabled = true
         ContentFrame.ScrollBarImageTransparency = 1
         RegisterScrollingFrame(ContentFrame)
-
+        
         local Tab = {
             Mains = {},
             ContentFrame = ContentFrame,
             Button = TabButton,
             Page = Page,
         }
-
+        
         table.insert(Library.Tabs, Tab)
-
+        
         function Tab:GetMain(sideName)
             sideName = sideName or "Main1"
-
+            
             if not self.Mains[sideName] then
                 local main = Instance.new("ScrollingFrame")
                 main.Name = sideName
@@ -731,21 +932,21 @@ function Library:CreateWindow(options)
                 main.ScrollingEnabled = true
                 main.ScrollBarImageTransparency = 1
                 RegisterScrollingFrame(main)
-
+                
                 local corner = Instance.new("UICorner")
                 corner.Parent = main
-
+                
                 local layout = Instance.new("UIListLayout")
                 layout.Parent = main
                 layout.SortOrder = Enum.SortOrder.LayoutOrder
                 layout.Padding = UDim.new(0, 8)
                 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
+                
                 local padding = Instance.new("UIPadding")
                 padding.Parent = main
                 padding.PaddingTop = UDim.new(0, 10)
                 padding.PaddingBottom = UDim.new(0, 10)
-
+                
                 layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     local contentHeight = layout.AbsoluteContentSize.Y + 20
                     main.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
@@ -755,20 +956,20 @@ function Library:CreateWindow(options)
                         self:UpdateLayout()
                     end
                 end)
-
+                
                 self.Mains[sideName] = main
                 self:UpdateLayout()
             end
-
+            
             if self.Mains[sideName].Visible == false then
                 self.Mains[sideName].Visible = true
                 self.Mains[sideName].Size = UDim2.new(0, 204, 0, 350)
                 self:UpdateLayout()
             end
-
+            
             return self.Mains[sideName]
         end
-
+        
         function Tab:UpdateLayout()
             local sorted = {}
             for name, main in pairs(self.Mains) do
@@ -778,14 +979,14 @@ function Library:CreateWindow(options)
                 end
             end
             table.sort(sorted, function(a, b) return a.Index < b.Index end)
-
+            
             local colWidth, colGap, rowGap, startY = 204, 12, 10, 10
             local rowHeights = {}
             for i, data in ipairs(sorted) do
                 local row = math.floor((i - 1) / 2)
                 rowHeights[row] = math.max(rowHeights[row] or 0, data.Main.Size.Y.Offset)
             end
-
+            
             for i, data in ipairs(sorted) do
                 local col = (i - 1) % 2
                 local row = math.floor((i - 1) / 2)
@@ -793,7 +994,7 @@ function Library:CreateWindow(options)
                 for r = 0, row - 1 do yPos = yPos + (rowHeights[r] or 350) + rowGap end
                 data.Main.Position = UDim2.new(0, 2 + col * (colWidth + colGap), 0, yPos)
             end
-
+            
             local maxRow = -1
             for r, _ in pairs(rowHeights) do maxRow = math.max(maxRow, r) end
             local totalHeight = startY
@@ -803,32 +1004,33 @@ function Library:CreateWindow(options)
             end
             self.ContentFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(totalHeight, self.ContentFrame.AbsoluteSize.Y))
         end
-
+        
         function Tab:Select()
             CloseAllDropdowns()
+            
             for _, v in pairs(Container:GetChildren()) do if v:IsA("Frame") or v:IsA("ScrollingFrame") then v.Visible = false end end
             for _, v in pairs(TabsContainer:GetChildren()) do if v:IsA("ImageButton") then Library:Tween(v, {BackgroundColor3 = Color3.fromRGB(36, 36, 36)}) end end
             for _, v in pairs(TabsScrolling:GetChildren()) do if v:IsA("ImageButton") then Library:Tween(v, {BackgroundColor3 = Color3.fromRGB(36, 36, 36)}) end end
             Page.Visible = true
             Library:Tween(TabButton, {BackgroundColor3 = Library.Theme.Accent})
         end
-
+        
         TabButton.MouseButton1Click:Connect(function() Tab:Select() end)
         if Window.Count == 1 then Tab:Select() end
-
-        -- ========== COMPONENTES ==========
-
+        
+        -- ========== COMPONENTES (MANTIDOS COMO NO ORIGINAL) ==========
+        
         function Tab:AddButton(btnOptions)
             local Text = btnOptions.Text or "Button"
             local Side = btnOptions.Side or "Main1"
             local Callback = btnOptions.Callback or function() end
             local targetMain = self:GetMain(Side)
-
+            
             local ButtonFrame = Instance.new("Frame")
             ButtonFrame.Name = "Button_" .. Text
             ButtonFrame.BackgroundTransparency = 1
             ButtonFrame.Size = UDim2.new(0, 184, 0, 36)
-
+            
             local TextButton = Instance.new("TextButton")
             TextButton.Parent = ButtonFrame
             TextButton.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
@@ -839,12 +1041,12 @@ function Library:CreateWindow(options)
             SetTextRole(TextButton, "Primary")
             TextButton.TextSize = 15
             TextButton.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local Corner = Instance.new("UICorner")
             Corner.Parent = TextButton
-
+            
             ButtonFrame.Parent = targetMain
-
+            
             TextButton.MouseButton1Click:Connect(function()
                 if Library.IsDraggingWindow then return end
                 local Ripple = Instance.new("Frame")
@@ -858,7 +1060,7 @@ function Library:CreateWindow(options)
                 task.spawn(Callback)
             end)
         end
-
+        
         function Tab:AddSlider(sldOptions)
             local Text = sldOptions.Text or "Slider"
             local Min = sldOptions.Min or 0
@@ -869,14 +1071,14 @@ function Library:CreateWindow(options)
             local Callback = sldOptions.Callback or function() end
             local Flag = sldOptions.Flag or Text
             local targetMain = self:GetMain(Side)
-
+            
             local SliderFrame = Instance.new("Frame")
             SliderFrame.Name = "Slider_" .. Text
             SliderFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
             SliderFrame.BackgroundTransparency = 1
             SliderFrame.Size = UDim2.new(0, 184, 0, 70)
             SliderFrame.Parent = targetMain
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = SliderFrame
             Title.BackgroundTransparency = 1
@@ -889,7 +1091,7 @@ function Library:CreateWindow(options)
             Title.TextScaled = true
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local Info = Instance.new("TextLabel")
             Info.Parent = SliderFrame
             Info.BackgroundTransparency = 1
@@ -901,20 +1103,20 @@ function Library:CreateWindow(options)
             Info.TextScaled = true
             Info.TextXAlignment = Enum.TextXAlignment.Right
             Info.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local SliderMain = Instance.new("Frame")
             SliderMain.Parent = SliderFrame
             SliderMain.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
             SliderMain.Position = UDim2.new(0.065, 0, 0, 52)
             SliderMain.Size = UDim2.new(0, 166, 0, 4)
             local SMCorner = Instance.new("UICorner"); SMCorner.Parent = SliderMain
-
+            
             local SliderBar = Instance.new("Frame")
             SliderBar.Parent = SliderMain
             SliderBar.BackgroundColor3 = Library.Theme.Accent
             SliderBar.Size = UDim2.new((Default - Min) / (Max - Min), 0, 1, 0)
             local SBCorner = Instance.new("UICorner"); SBCorner.Parent = SliderBar
-
+            
             local Cursor = Instance.new("Frame")
             Cursor.Parent = SliderMain
             Cursor.BackgroundColor3 = Library.Theme.Accent
@@ -922,43 +1124,58 @@ function Library:CreateWindow(options)
             Cursor.Size = UDim2.new(0, 18, 0, 18)
             local CCorner = Instance.new("UICorner")
             CCorner.CornerRadius = UDim.new(1, 0); CCorner.Parent = Cursor
-
+            
             local dragging = false
             local LastValue = Default
             local LastUpdate = 0
-
+            
             local function Update(input)
                 if Library.IsDraggingWindow then return end
+                
                 local now = tick()
                 if now - LastUpdate < 1/60 then return end
                 LastUpdate = now
+                
                 local pos = math.clamp((input.Position.X - SliderMain.AbsolutePosition.X) / SliderMain.AbsoluteSize.X, 0, 1)
                 local val = math.floor(Min + (Max - Min) * pos)
+                
                 if val == LastValue then return end
                 LastValue = val
+                
                 Info.Text = tostring(val) .. Suffix
                 SliderBar.Size = UDim2.new(pos, 0, 1, 0)
                 Cursor.Position = UDim2.new(pos, -9, 0, -7)
                 Library.Flags[Flag] = val
-                task.spawn(function() Callback(val) end)
+                
+                task.spawn(function()
+                    Callback(val)
+                end)
             end
-
+            
             local function VisualUpdate(val, fromConfig)
                 val = tonumber(val)
                 if not val then return end
                 val = math.clamp(val, Min, Max)
+                
                 local pos = 0
-                if Max ~= Min then pos = (val - Min) / (Max - Min) end
+                if Max ~= Min then
+                    pos = (val - Min) / (Max - Min)
+                end
+                
                 Info.Text = tostring(val) .. Suffix
                 SliderBar.Size = UDim2.new(pos, 0, 1, 0)
                 Cursor.Position = UDim2.new(pos, -9, 0, -7)
+                
                 LastValue = val
                 Library.Flags[Flag] = val
+                
                 if fromConfig then
-                    task.spawn(function() pcall(Callback, val) end)
+                    task.spawn(function()
+                        pcall(Callback, val)
+                    end)
                 end
             end
-
+            
             SliderMain.InputBegan:Connect(function(input)
                 if Library.IsDraggingWindow then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -968,7 +1185,7 @@ function Library:CreateWindow(options)
                     Update(input)
                 end
             end)
-
+            
             UserInputService.InputEnded:Connect(function(input)
                 if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and dragging then
                     dragging = false
@@ -976,17 +1193,17 @@ function Library:CreateWindow(options)
                     SetAllScrollingEnabledFast(true)
                 end
             end)
-
+            
             RegisterInputConnection(function(input)
                 if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                     Update(input)
                 end
             end)
-
+            
             Library.Flags[Flag] = Default
             table.insert(Library.Components.Sliders, { Flag = Flag, UpdateFn = VisualUpdate })
         end
-
+        
         function Tab:AddDropdown(drpOptions)
             local Text = drpOptions.Text or "Dropdown"
             local List = drpOptions.List or {}
@@ -995,15 +1212,14 @@ function Library:CreateWindow(options)
             local Callback = drpOptions.Callback or function() end
             local Flag = drpOptions.Flag or Text
             local targetMain = self:GetMain(Side)
-
+            
             local DropdownFrame = Instance.new("Frame")
-            DropdownFrame.BackgroundColor3 = Library.Theme.DropdownBackground
-            DropdownFrame:SetAttribute("FFh4xDropdownBg", true)
+            DropdownFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
             DropdownFrame.Size = UDim2.new(0, 194, 0, 34)
             DropdownFrame.ClipsDescendants = true
             DropdownFrame.Parent = targetMain
             local DCorner = Instance.new("UICorner"); DCorner.Parent = DropdownFrame
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = DropdownFrame
             Title.BackgroundTransparency = 1
@@ -1015,28 +1231,28 @@ function Library:CreateWindow(options)
             Title.TextSize = 14
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local Arrow = Instance.new("ImageLabel")
             Arrow.Parent = DropdownFrame
             Arrow.BackgroundTransparency = 1
             Arrow.Position = UDim2.new(1, -30, 0, 7)
             Arrow.Size = UDim2.new(0, 20, 0, 20)
             Arrow.Image = "rbxassetid://6034818372"
-
+            
             local ListFrame = Instance.new("Frame")
             ListFrame.Parent = DropdownFrame
             ListFrame.BackgroundTransparency = 1
             ListFrame.Position = UDim2.new(0, 0, 0, 34)
             ListFrame.Size = UDim2.new(1, 0, 0, #List * 30)
             local ListLayout = Instance.new("UIListLayout"); ListLayout.Parent = ListFrame
-
+            
             local DropdownData = {
                 Opened = false,
                 Frame = DropdownFrame,
                 Arrow = Arrow,
                 ClosedSize = UDim2.new(0, 194, 0, 34)
             }
-
+            
             local function VisualUpdate(value, fromConfig)
                 if value ~= nil then
                     local valid = false
@@ -1048,23 +1264,31 @@ function Library:CreateWindow(options)
                         end
                     end
                     if not valid then return end
+                    
                     Title.Text = Text .. ": " .. tostring(value)
                     Library.Flags[Flag] = value
+                    
                     if fromConfig then
-                        task.spawn(function() pcall(Callback, value) end)
+                        task.spawn(function()
+                            pcall(Callback, value)
+                        end)
                     end
                 else
                     Title.Text = Text
                     Library.Flags[Flag] = nil
+                    
                     if fromConfig then
-                        task.spawn(function() pcall(Callback, nil) end)
+                        task.spawn(function()
+                            pcall(Callback, nil)
+                        end)
                     end
                 end
             end
-
+            
             local function Toggle()
                 if Library.IsDraggingWindow then return end
                 DropdownData.Opened = not DropdownData.Opened
+                
                 if DropdownData.Opened then
                     RegisterOpenDropdown(DropdownData)
                 else
@@ -1075,16 +1299,17 @@ function Library:CreateWindow(options)
                         end
                     end
                 end
+                
                 local targetSize = DropdownData.Opened and UDim2.new(0, 194, 0, 34 + (#List * 30)) or UDim2.new(0, 194, 0, 34)
                 Library:Tween(DropdownFrame, {Size = targetSize})
                 Library:Tween(Arrow, {Rotation = DropdownData.Opened and 180 or 0})
             end
-
+            
             DropdownFrame.InputBegan:Connect(function(input)
                 if Library.IsDraggingWindow then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then Toggle() end
             end)
-
+            
             local function CreateItems()
                 for _, child in ipairs(ListFrame:GetChildren()) do
                     if child:IsA("TextButton") then child:Destroy() end
@@ -1110,11 +1335,14 @@ function Library:CreateWindow(options)
                     end)
                 end
             end
-
+            
             CreateItems()
-            if Default ~= nil then VisualUpdate(Default) end
+            if Default ~= nil then
+                VisualUpdate(Default)
+            end
+            
             table.insert(Library.Components.Dropdowns, { Flag = Flag, UpdateFn = VisualUpdate })
-
+            
             local DropdownObject = {
                 SetList = function(_, newList)
                     List = newList or {}
@@ -1124,11 +1352,13 @@ function Library:CreateWindow(options)
                         Library:Tween(DropdownFrame, {Size = targetSize})
                     end
                 end,
-                GetValue = function() return Library.Flags[Flag] end
+                GetValue = function()
+                    return Library.Flags[Flag]
+                end
             }
             return DropdownObject
         end
-
+        
         function Tab:AddTextbox(txtOptions)
             local Text = txtOptions.Text or "Textbox"
             local Placeholder = txtOptions.Placeholder or "Type here..."
@@ -1136,13 +1366,13 @@ function Library:CreateWindow(options)
             local Callback = txtOptions.Callback or function() end
             local Flag = txtOptions.Flag or Text
             local targetMain = self:GetMain(Side)
-
+            
             local TextboxFrame = Instance.new("Frame")
             TextboxFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
             TextboxFrame.Size = UDim2.new(0, 194, 0, 50)
             TextboxFrame.Parent = targetMain
             local TCorner = Instance.new("UICorner"); TCorner.Parent = TextboxFrame
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = TextboxFrame
             Title.BackgroundTransparency = 1
@@ -1154,7 +1384,7 @@ function Library:CreateWindow(options)
             Title.TextSize = 12
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local Input = Instance.new("TextBox")
             Input.Parent = TextboxFrame
             Input.BackgroundTransparency = 1
@@ -1166,12 +1396,12 @@ function Library:CreateWindow(options)
             Input.TextSize = 14
             Input.TextXAlignment = Enum.TextXAlignment.Left
             Input.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             Input.FocusLost:Connect(function(enter)
                 Library.Flags[Flag] = Input.Text
                 task.spawn(function() Callback(Input.Text, enter) end)
             end)
-
+            
             table.insert(Library.Components.Textboxes, {
                 Flag = Flag,
                 UpdateFn = function(value, fromConfig)
@@ -1179,12 +1409,14 @@ function Library:CreateWindow(options)
                     Input.Text = value
                     Library.Flags[Flag] = value
                     if fromConfig then
-                        task.spawn(function() pcall(Callback, value, false) end)
+                        task.spawn(function()
+                            pcall(Callback, value, false)
+                        end)
                     end
                 end
             })
         end
-
+        
         function Tab:AddParagraph(prgOptions)
             local Title, Content = prgOptions.Title or "Paragraph", prgOptions.Content or ""
             local Side = prgOptions.Side or "Main1"
@@ -1222,7 +1454,7 @@ function Library:CreateWindow(options)
                 ContentLabel.Size = UDim2.new(1, -20, 0, ContentLabel.TextBounds.Y)
             end)
         end
-
+        
         function Tab:AddSection(secOptions)
             local Text = secOptions.Text or "Section"
             local Side = secOptions.Side or "Main1"
@@ -1242,7 +1474,7 @@ function Library:CreateWindow(options)
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
             Title.TextWrapped = true
         end
-
+        
         function Tab:AddSeparator(Side)
             Side = Side or "Main1"
             local targetMain = self:GetMain(Side)
@@ -1252,7 +1484,7 @@ function Library:CreateWindow(options)
             Sep.Size = UDim2.new(0, 180, 0, 1)
             Sep.Parent = targetMain
         end
-
+        
         function Tab:AddToggle(tglOptions)
             local Text = tglOptions.Text or "Toggle"
             local Side = tglOptions.Side or "Main1"
@@ -1260,18 +1492,18 @@ function Library:CreateWindow(options)
             local Callback = tglOptions.Callback or function() end
             local Flag = tglOptions.Flag or Text
             local targetMain = self:GetMain(Side)
-
+            
             local ToggleFrame = Instance.new("Frame")
             ToggleFrame.BackgroundTransparency = 1
             ToggleFrame.Size = UDim2.new(0, 194, 0, 34)
-
+            
             local ToggleBtn = Instance.new("ImageButton")
             ToggleBtn.Parent = ToggleFrame
             ToggleBtn.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
             ToggleBtn.Size = UDim2.new(0, 34, 0, 34)
             local TCorner = Instance.new("UICorner")
             TCorner.Parent = ToggleBtn
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = ToggleFrame
             Title.BackgroundTransparency = 1
@@ -1283,10 +1515,10 @@ function Library:CreateWindow(options)
             Title.TextSize = 16
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local Enabled = Default
             Library.Flags[Flag] = Enabled
-
+            
             local function Update()
                 if Enabled then
                     Library:Tween(ToggleBtn, {BackgroundColor3 = Library.Theme.Accent})
@@ -1298,9 +1530,10 @@ function Library:CreateWindow(options)
                 Library.Flags[Flag] = Enabled
                 task.spawn(function() Callback(Enabled) end)
             end
-
+            
             local function VisualUpdate(state, fromConfig)
                 Enabled = state == true
+                
                 if Enabled then
                     Library:Tween(ToggleBtn, {BackgroundColor3 = Library.Theme.Accent})
                     ToggleBtn.Image = "rbxassetid://130396712201457"
@@ -1308,18 +1541,22 @@ function Library:CreateWindow(options)
                     Library:Tween(ToggleBtn, {BackgroundColor3 = Color3.fromRGB(36, 36, 36)})
                     ToggleBtn.Image = ""
                 end
+                
                 Library.Flags[Flag] = Enabled
+                
                 if fromConfig then
-                    task.spawn(function() pcall(Callback, Enabled) end)
+                    task.spawn(function()
+                        pcall(Callback, Enabled)
+                    end)
                 end
             end
-
+            
             local function ToggleAction()
                 if Library.IsDraggingWindow then return end
                 Enabled = not Enabled
                 Update()
             end
-
+            
             local InvisibleButton = Instance.new("TextButton")
             InvisibleButton.Name = "ClickArea"
             InvisibleButton.Parent = ToggleFrame
@@ -1327,15 +1564,15 @@ function Library:CreateWindow(options)
             InvisibleButton.Size = UDim2.new(1, 0, 1, 0)
             InvisibleButton.Text = ""
             InvisibleButton.ZIndex = 5
-
+            
             InvisibleButton.Activated:Connect(ToggleAction)
             ToggleBtn.Activated:Connect(ToggleAction)
-
+            
             Update()
             ToggleFrame.Parent = targetMain
             table.insert(Library.Components.Toggles, { Flag = Flag, UpdateFn = VisualUpdate })
         end
-
+        
         function Tab:AddKeybind(kbOptions)
             local Text = kbOptions.Text or "Keybind"
             local Default = kbOptions.Default or Enum.KeyCode.F
@@ -1343,12 +1580,12 @@ function Library:CreateWindow(options)
             local Callback = kbOptions.Callback or function() end
             local Flag = kbOptions.Flag or Text
             local targetMain = self:GetMain(Side)
-
+            
             local KeybindFrame = Instance.new("Frame")
             KeybindFrame.BackgroundTransparency = 1
             KeybindFrame.Size = UDim2.new(0, 194, 0, 34)
             KeybindFrame.Parent = targetMain
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = KeybindFrame
             Title.BackgroundTransparency = 1
@@ -1361,7 +1598,7 @@ function Library:CreateWindow(options)
             Title.TextScaled = true
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local KeyBtn = Instance.new("TextButton")
             KeyBtn.Parent = KeybindFrame
             KeyBtn.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
@@ -1372,15 +1609,15 @@ function Library:CreateWindow(options)
             KeyBtn.TextSize = 12
             KeyBtn.TextScaled = true
             KeyBtn.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local KCorner = Instance.new("UICorner")
             KCorner.CornerRadius = UDim.new(0, 4)
             KCorner.Parent = KeyBtn
-
+            
             local Binding = false
             local CurrentKey = Default
             Library.Flags[Flag] = CurrentKey
-
+            
             local function VisualUpdate(key, fromConfig)
                 CurrentKey = key
                 if key then
@@ -1391,18 +1628,21 @@ function Library:CreateWindow(options)
                 end
                 KeyBtn.TextColor3 = Library.Theme.Accent
                 Library.Flags[Flag] = CurrentKey
+                
                 if fromConfig then
-                    task.spawn(function() pcall(Callback, CurrentKey) end)
+                    task.spawn(function()
+                        pcall(Callback, CurrentKey)
+                    end)
                 end
             end
-
+            
             KeyBtn.MouseButton1Click:Connect(function()
                 if Library.IsDraggingWindow then return end
                 Binding = true
                 KeyBtn.Text = "..."
                 KeyBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
             end)
-
+            
             UserInputService.InputBegan:Connect(function(input)
                 if Binding then
                     if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -1427,10 +1667,10 @@ function Library:CreateWindow(options)
                     end
                 end
             end)
-
+            
             table.insert(Library.Components.Keybinds, { Flag = Flag, UpdateFn = VisualUpdate })
         end
-
+        
         function Tab:AddLabel(lblOptions)
             local Text = lblOptions.Text or "Label"
             local Side = lblOptions.Side or "Main1"
@@ -1451,22 +1691,23 @@ function Library:CreateWindow(options)
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
         end
-
+        
         function Tab:AddPlayerList(options)
             local Text = options.Text or "Lista de Jogadores"
             local Side = options.Side or "Main1"
             local Callback = options.Callback or function() end
             local Flag = options.Flag or Text
             local targetMain = self:GetMain(Side)
+            
             local Players = game:GetService("Players")
-
+            
             local Container = Instance.new("Frame")
             Container.Name = "PlayerList_" .. Text
             Container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
             Container.Size = UDim2.new(0, 194, 0, 250)
             Container.Parent = targetMain
             local CCorner = Instance.new("UICorner"); CCorner.Parent = Container
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = Container
             Title.BackgroundTransparency = 1
@@ -1478,7 +1719,7 @@ function Library:CreateWindow(options)
             Title.TextSize = 14
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Bold)
-
+            
             local ListScrolling = Instance.new("ScrollingFrame")
             ListScrolling.Name = "List"
             ListScrolling.Parent = Container
@@ -1491,20 +1732,20 @@ function Library:CreateWindow(options)
             ListScrolling.ScrollingEnabled = true
             ListScrolling.ScrollBarImageTransparency = 1
             RegisterScrollingFrame(ListScrolling)
-
+            
             local ListLayout = Instance.new("UIListLayout")
             ListLayout.Parent = ListScrolling
             ListLayout.SortOrder = Enum.SortOrder.Name
             ListLayout.Padding = UDim.new(0, 5)
-
+            
             local SelectedPlayer = nil
             local PlayerEntries = {}
-
+            
             local function UpdateCanvas()
                 ListScrolling.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y)
             end
             ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
-
+            
             local function SelectPlayer(player, entry)
                 if SelectedPlayer == player then
                     SelectedPlayer = nil
@@ -1519,7 +1760,7 @@ function Library:CreateWindow(options)
                 Library.Flags[Flag] = SelectedPlayer
                 task.spawn(function() Callback(SelectedPlayer) end)
             end
-
+            
             local function AddPlayerEntry(player)
                 if PlayerEntries[player] then return end
                 local Entry = Instance.new("TextButton")
@@ -1562,7 +1803,7 @@ function Library:CreateWindow(options)
                 PlayerEntries[player] = Entry
                 UpdateCanvas()
             end
-
+            
             local function RemovePlayerEntry(player)
                 if PlayerEntries[player] then
                     PlayerEntries[player]:Destroy()
@@ -1575,18 +1816,18 @@ function Library:CreateWindow(options)
                     UpdateCanvas()
                 end
             end
-
+            
             for _, player in ipairs(Players:GetPlayers()) do
                 AddPlayerEntry(player)
             end
-
+            
             local AddedConn = Players.PlayerAdded:Connect(AddPlayerEntry)
             local RemovedConn = Players.PlayerRemoving:Connect(RemovePlayerEntry)
             Container.Destroying:Connect(function()
                 AddedConn:Disconnect()
                 RemovedConn:Disconnect()
             end)
-
+            
             return {
                 GetSelected = function() return SelectedPlayer end,
                 Refresh = function()
@@ -1596,7 +1837,7 @@ function Library:CreateWindow(options)
                 end
             }
         end
-
+        
         function Tab:AddBodyPartSelector(options)
             local Text = options.Text or "Selecionar Parte"
             local Side = options.Side or "Main1"
@@ -1604,14 +1845,14 @@ function Library:CreateWindow(options)
             local Callback = options.Callback or function() end
             local Flag = options.Flag or Text
             local targetMain = self:GetMain(Side)
-
+            
             local Container = Instance.new("Frame")
             Container.Name = "BodyPartSelector_" .. Text
             Container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
             Container.Size = UDim2.new(0, 194, 0, 240)
             Container.Parent = targetMain
             local CCorner = Instance.new("UICorner"); CCorner.Parent = Container
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = Container
             Title.BackgroundTransparency = 1
@@ -1623,7 +1864,7 @@ function Library:CreateWindow(options)
             Title.TextSize = 14
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Bold)
-
+            
             local TypeBtn = Instance.new("TextButton")
             TypeBtn.Parent = Container
             TypeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
@@ -1635,23 +1876,23 @@ function Library:CreateWindow(options)
             TypeBtn.TextSize = 12
             TypeBtn.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
             local TBCorner = Instance.new("UICorner"); TBCorner.CornerRadius = UDim.new(0, 4); TBCorner.Parent = TypeBtn
-
+            
             local CharFrame = Instance.new("Frame")
             CharFrame.Parent = Container
             CharFrame.BackgroundTransparency = 1
             CharFrame.Position = UDim2.new(0.5, -60, 0, 35)
             CharFrame.Size = UDim2.new(0, 120, 0, 180)
-
+            
             local CharImage = Instance.new("ImageLabel")
             CharImage.Parent = CharFrame
             CharImage.BackgroundTransparency = 1
             CharImage.Size = UDim2.new(1, 0, 1, 0)
             CharImage.Image = "rbxassetid://12002344035"
             CharImage.ImageColor3 = Color3.fromRGB(60, 60, 60)
-
+            
             local SelectedPart = nil
             local PartButtons = {}
-
+            
             local function SelectPart(partName, button)
                 if SelectedPart == partName then
                     SelectedPart = nil
@@ -1675,7 +1916,7 @@ function Library:CreateWindow(options)
                 Library.Flags[Flag] = SelectedPart
                 task.spawn(function() Callback(SelectedPart) end)
             end
-
+            
             local function CreatePartButton(name, pos, size)
                 local Btn = Instance.new("TextButton")
                 Btn.Name = name
@@ -1696,13 +1937,13 @@ function Library:CreateWindow(options)
                 PartButtons[name] = Btn
                 return Btn
             end
-
+            
             local function RenderLayout(type)
                 for _, btn in pairs(PartButtons) do btn:Destroy() end
                 PartButtons = {}
                 SelectedPart = nil
                 Library.Flags[Flag] = nil
-
+                
                 if type == "R6" then
                     CreatePartButton("Head", UDim2.new(0.5, -15, 0, 5), UDim2.new(0, 30, 0, 30))
                     CreatePartButton("Torso", UDim2.new(0.5, -25, 0, 40), UDim2.new(0, 50, 0, 60))
@@ -1724,15 +1965,15 @@ function Library:CreateWindow(options)
                     CreatePartButton("RightUpperLeg", UDim2.new(0.5, 4, 0, 95), UDim2.new(0, 18, 0, 55))
                 end
             end
-
+            
             TypeBtn.MouseButton1Click:Connect(function()
                 CurrentType = (CurrentType == "R15") and "R6" or "R15"
                 TypeBtn.Text = CurrentType
                 RenderLayout(CurrentType)
             end)
-
+            
             RenderLayout(CurrentType)
-
+            
             table.insert(Library.Components.BodyParts, {
                 Flag = Flag,
                 UpdateFn = function(value, fromConfig)
@@ -1745,12 +1986,14 @@ function Library:CreateWindow(options)
                         SelectedPart = nil
                         SelectPart(value, PartButtons[value])
                         if fromConfig then
-                            task.spawn(function() pcall(Callback, value) end)
+                            task.spawn(function()
+                                pcall(Callback, value)
+                            end)
                         end
                     end
                 end
             })
-
+            
             return {
                 SetPart = function(self, partName)
                     if PartButtons[partName] then SelectPart(partName, PartButtons[partName]) end
@@ -1762,7 +2005,7 @@ function Library:CreateWindow(options)
                 end
             }
         end
-
+        
         function Tab:AddColorPicker(cpOptions)
             local Text = cpOptions.Text or "Color Picker"
             local Default = cpOptions.Default or Color3.fromRGB(255, 0, 0)
@@ -1770,14 +2013,14 @@ function Library:CreateWindow(options)
             local Callback = cpOptions.Callback or function() end
             local Flag = cpOptions.Flag or Text
             local targetMain = self:GetMain(Side)
-
+            
             local ColorPickerFrame = Instance.new("Frame")
             ColorPickerFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
             ColorPickerFrame.Size = UDim2.new(0, 194, 0, 34)
             ColorPickerFrame.ClipsDescendants = true
             ColorPickerFrame.Parent = targetMain
             local CPCorner = Instance.new("UICorner"); CPCorner.Parent = ColorPickerFrame
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = ColorPickerFrame
             Title.BackgroundTransparency = 1
@@ -1789,20 +2032,20 @@ function Library:CreateWindow(options)
             Title.TextSize = 14
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local ColorDisplay = Instance.new("Frame")
             ColorDisplay.Parent = ColorPickerFrame
             ColorDisplay.BackgroundColor3 = Default
             ColorDisplay.Position = UDim2.new(1, -35, 0, 7)
             ColorDisplay.Size = UDim2.new(0, 20, 0, 20)
             local CDCorner = Instance.new("UICorner"); CDCorner.CornerRadius = UDim.new(0, 4); CDCorner.Parent = ColorDisplay
-
+            
             local PickerContainer = Instance.new("Frame")
             PickerContainer.Parent = ColorPickerFrame
             PickerContainer.BackgroundTransparency = 1
             PickerContainer.Position = UDim2.new(0, 0, 0, 34)
             PickerContainer.Size = UDim2.new(1, 0, 0, 150)
-
+            
             local HueSatImg = Instance.new("ImageLabel")
             HueSatImg.Name = "HueSat"
             HueSatImg.Parent = PickerContainer
@@ -1811,48 +2054,48 @@ function Library:CreateWindow(options)
             HueSatImg.Size = UDim2.new(0, 150, 0, 120)
             HueSatImg.Image = "rbxassetid://73194550500215"
             local SCorner = Instance.new("UICorner"); SCorner.Parent = HueSatImg
-
+            
             local SCursor = Instance.new("Frame")
             SCursor.Parent = HueSatImg
             SCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             SCursor.Size = UDim2.new(0, 6, 0, 6)
             SCursor.ZIndex = 2
             local SCCorner = Instance.new("UICorner"); SCCorner.CornerRadius = UDim.new(1, 0); SCCorner.Parent = SCursor
-
+            
             local ValueBar = Instance.new("Frame")
             ValueBar.Name = "ValueBar"
             ValueBar.Parent = PickerContainer
             ValueBar.Position = UDim2.new(0, 170, 0, 5)
             ValueBar.Size = UDim2.new(0, 15, 0, 120)
             local VCorner = Instance.new("UICorner"); VCorner.Parent = ValueBar
-
+            
             local VGradient = Instance.new("UIGradient")
             VGradient.Rotation = 90
             VGradient.Parent = ValueBar
-
+            
             local VCursor = Instance.new("Frame")
             VCursor.Parent = ValueBar
             VCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             VCursor.BackgroundTransparency = 1
             VCursor.Size = UDim2.new(1, 0, 0, 3)
             VCursor.ZIndex = 2
-
+            
             local VCursorCorner = Instance.new("UICorner")
             VCursorCorner.CornerRadius = UDim.new(0, 4)
             VCursorCorner.Parent = VCursor
-
+            
             local VCursorStroke = Instance.new("UIStroke")
             VCursorStroke.Parent = VCursor
             VCursorStroke.Color = Color3.fromRGB(255, 255, 255)
             VCursorStroke.Thickness = 1
-
+            
             local H, S, V = Default:ToHSV()
             local Opened = false
             local LastColor = nil
             local LastH = H
             local LastS = S
             local LastUpdate = 0
-
+            
             local function UpdateColor()
                 local now = tick()
                 if now - LastUpdate < 1/60 then return end
@@ -1869,7 +2112,7 @@ function Library:CreateWindow(options)
                 Library.Flags[Flag] = color
                 task.spawn(function() Callback(color) end)
             end
-
+            
             local function VisualUpdate(color, fromConfig)
                 if typeof(color) ~= "Color3" then return end
                 H, S, V = color:ToHSV()
@@ -1879,17 +2122,20 @@ function Library:CreateWindow(options)
                 SCursor.Position = UDim2.new(H, -3, 1 - S, -3)
                 Library.Flags[Flag] = color
                 LastColor = color
+                
                 if fromConfig then
-                    task.spawn(function() pcall(Callback, color) end)
+                    task.spawn(function()
+                        pcall(Callback, color)
+                    end)
                 end
             end
-
+            
             local function Toggle()
                 if Library.IsDraggingWindow or Library.IsDraggingColorPicker then return end
                 Opened = not Opened
                 Library:Tween(ColorPickerFrame, {Size = Opened and UDim2.new(0, 194, 0, 184) or UDim2.new(0, 194, 0, 34)})
             end
-
+            
             local HeaderButton = Instance.new("TextButton")
             HeaderButton.Name = "HeaderButton"
             HeaderButton.Parent = ColorPickerFrame
@@ -1898,9 +2144,9 @@ function Library:CreateWindow(options)
             HeaderButton.Text = ""
             HeaderButton.ZIndex = 5
             HeaderButton.Activated:Connect(Toggle)
-
+            
             local VDragging, HSDragging = false, false
-
+            
             ValueBar.InputBegan:Connect(function(input)
                 if Library.IsDraggingWindow then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1909,7 +2155,7 @@ function Library:CreateWindow(options)
                     SetAllScrollingEnabledFast(false)
                 end
             end)
-
+            
             HueSatImg.InputBegan:Connect(function(input)
                 if Library.IsDraggingWindow then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1918,7 +2164,7 @@ function Library:CreateWindow(options)
                     SetAllScrollingEnabledFast(false)
                 end
             end)
-
+            
             UserInputService.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     if VDragging or HSDragging then
@@ -1929,7 +2175,7 @@ function Library:CreateWindow(options)
                     end
                 end
             end)
-
+            
             RegisterInputConnection(function(input)
                 if VDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                     local y = math.clamp((input.Position.Y - ValueBar.AbsolutePosition.Y) / ValueBar.AbsoluteSize.Y, 0, 1)
@@ -1949,13 +2195,13 @@ function Library:CreateWindow(options)
                     end
                 end
             end)
-
+            
             VCursor.Position = UDim2.new(0, 0, 1 - V, -1)
             SCursor.Position = UDim2.new(H, -3, 1 - S, -3)
             UpdateColor()
             table.insert(Library.Components.ColorPickers, { Flag = Flag, UpdateFn = VisualUpdate })
         end
-
+        
         function Tab:AddMultiColorPicker(mcpOptions)
             local Text = mcpOptions.Text or "Multi Color Picker"
             local Colors = mcpOptions.Colors or {}
@@ -1963,14 +2209,14 @@ function Library:CreateWindow(options)
             local Callback = mcpOptions.Callback or function() end
             local Flag = mcpOptions.Flag or Text
             local targetMain = self:GetMain(Side)
-
+            
             local MultiCPFrame = Instance.new("Frame")
             MultiCPFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
             MultiCPFrame.Size = UDim2.new(0, 194, 0, 34)
             MultiCPFrame.ClipsDescendants = true
             MultiCPFrame.Parent = targetMain
             local MCPCorner = Instance.new("UICorner"); MCPCorner.Parent = MultiCPFrame
-
+            
             local Title = Instance.new("TextLabel")
             Title.Parent = MultiCPFrame
             Title.BackgroundTransparency = 1
@@ -1982,21 +2228,21 @@ function Library:CreateWindow(options)
             Title.TextSize = 14
             Title.TextXAlignment = Enum.TextXAlignment.Left
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+            
             local Arrow = Instance.new("ImageLabel")
             Arrow.Parent = MultiCPFrame
             Arrow.BackgroundTransparency = 1
             Arrow.Position = UDim2.new(1, -30, 0, 7)
             Arrow.Size = UDim2.new(0, 20, 0, 20)
             Arrow.Image = "rbxassetid://6034818372"
-
+            
             local ListFrame = Instance.new("Frame")
             ListFrame.Parent = MultiCPFrame
             ListFrame.BackgroundTransparency = 1
             ListFrame.Position = UDim2.new(0, 0, 0, 34)
             ListFrame.Size = UDim2.new(1, 0, 0, #Colors * 34)
             local ListLayout = Instance.new("UIListLayout"); ListLayout.Parent = ListFrame
-
+            
             local Opened = false
             local function Toggle()
                 if Library.IsDraggingWindow or Library.IsDraggingColorPicker then return end
@@ -2004,7 +2250,7 @@ function Library:CreateWindow(options)
                 Library:Tween(MultiCPFrame, {Size = Opened and UDim2.new(0, 194, 0, 34 + (#Colors * 34)) or UDim2.new(0, 194, 0, 34)})
                 Library:Tween(Arrow, {Rotation = Opened and 180 or 0})
             end
-
+            
             local HeaderButton = Instance.new("TextButton")
             HeaderButton.Name = "HeaderButton"
             HeaderButton.Parent = MultiCPFrame
@@ -2013,25 +2259,25 @@ function Library:CreateWindow(options)
             HeaderButton.Text = ""
             HeaderButton.ZIndex = 5
             HeaderButton.Activated:Connect(Toggle)
-
+            
             local SelectedColors = {}
             Library.Flags[Flag] = SelectedColors
-
+            
             local pickerEndedConn = nil
             local pickerChangedConn = nil
-
+            
             for i, colorData in ipairs(Colors) do
                 local cText = colorData.Text or "Color " .. i
                 local cDefault = colorData.Default or Color3.fromRGB(255, 255, 255)
                 local cFlag = colorData.Flag or cText
                 SelectedColors[cFlag] = cDefault
-
+                
                 local ItemFrame = Instance.new("Frame")
                 ItemFrame.Parent = ListFrame
                 ItemFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
                 ItemFrame.BorderSizePixel = 0
                 ItemFrame.Size = UDim2.new(1, 0, 0, 34)
-
+                
                 local ItemTitle = Instance.new("TextLabel")
                 ItemTitle.Parent = ItemFrame
                 ItemTitle.BackgroundTransparency = 1
@@ -2043,23 +2289,23 @@ function Library:CreateWindow(options)
                 ItemTitle.TextSize = 13
                 ItemTitle.TextXAlignment = Enum.TextXAlignment.Left
                 ItemTitle.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-
+                
                 local ItemDisplay = Instance.new("Frame")
                 ItemDisplay.Parent = ItemFrame
                 ItemDisplay.BackgroundColor3 = cDefault
                 ItemDisplay.Position = UDim2.new(1, -30, 0, 7)
                 ItemDisplay.Size = UDim2.new(0, 20, 0, 20)
                 local IDCorner = Instance.new("UICorner"); IDCorner.CornerRadius = UDim.new(0, 4); IDCorner.Parent = ItemDisplay
-
+                
                 ItemDisplay.InputBegan:Connect(function(input)
                     if Library.IsDraggingWindow then return end
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         Library.IsDraggingColorPicker = true
                         SetAllScrollingEnabledFast(false)
-
+                        
                         if pickerEndedConn then pickerEndedConn:Disconnect() end
                         if pickerChangedConn then pickerChangedConn:Disconnect() end
-
+                        
                         local PickerWindow = Instance.new("Frame")
                         PickerWindow.Parent = ScreenGui
                         PickerWindow.BackgroundColor3 = Library.Theme.Main
@@ -2067,7 +2313,7 @@ function Library:CreateWindow(options)
                         PickerWindow.Size = UDim2.new(0, 194, 0, 150)
                         PickerWindow.ZIndex = 10
                         local PWCorner = Instance.new("UICorner"); PWCorner.Parent = PickerWindow
-
+                        
                         local PWHueSat = Instance.new("ImageLabel")
                         PWHueSat.Parent = PickerWindow
                         PWHueSat.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -2075,13 +2321,13 @@ function Library:CreateWindow(options)
                         PWHueSat.Size = UDim2.new(0, 140, 0, 130)
                         PWHueSat.Image = "rbxassetid://73194550500215"
                         PWHueSat.ZIndex = 11
-
+                        
                         local PWSCursor = Instance.new("Frame")
                         PWSCursor.Parent = PWHueSat
                         PWSCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                         PWSCursor.Size = UDim2.new(0, 6, 0, 6)
                         PWSCursor.ZIndex = 12
-
+                        
                         local PWValue = Instance.new("Frame")
                         PWValue.Parent = PickerWindow
                         PWValue.Position = UDim2.new(0, 160, 0, 10)
@@ -2096,13 +2342,13 @@ function Library:CreateWindow(options)
                         PWVCursor.BackgroundTransparency = 1
                         PWVCursor.Size = UDim2.new(1, 0, 0, 3)
                         PWVCursor.ZIndex = 12
-
+                        
                         local pH, pS, pV = SelectedColors[cFlag]:ToHSV()
                         local pLastColor = nil
                         local pLastH = pH
                         local pLastS = pS
                         local pLastUpdate = 0
-
+                        
                         local function UpdatePW()
                             local now = tick()
                             if now - pLastUpdate < 1/60 then return end
@@ -2119,23 +2365,23 @@ function Library:CreateWindow(options)
                             SelectedColors[cFlag] = color
                             task.spawn(function() Callback(SelectedColors) end)
                         end
-
+                        
                         local pHVDrag, pHSatDrag = false, false
-
+                        
                         PWValue.InputBegan:Connect(function(pInp)
                             if pInp.UserInputType == Enum.UserInputType.MouseButton1 or pInp.UserInputType == Enum.UserInputType.Touch then
                                 pHVDrag = true
                                 SetAllScrollingEnabledFast(false)
                             end
                         end)
-
+                        
                         PWHueSat.InputBegan:Connect(function(pInp)
                             if pInp.UserInputType == Enum.UserInputType.MouseButton1 or pInp.UserInputType == Enum.UserInputType.Touch then
                                 pHSatDrag = true
                                 SetAllScrollingEnabledFast(false)
                             end
                         end)
-
+                        
                         pickerEndedConn = UserInputService.InputEnded:Connect(function(pInp)
                             if pInp.UserInputType == Enum.UserInputType.MouseButton1 or pInp.UserInputType == Enum.UserInputType.Touch then
                                 pHVDrag = false
@@ -2143,7 +2389,7 @@ function Library:CreateWindow(options)
                                 SetAllScrollingEnabledFast(true)
                             end
                         end)
-
+                        
                         pickerChangedConn = RegisterInputConnection(function(pInp)
                             if pHVDrag then
                                 local y = math.clamp((pInp.Position.Y - PWValue.AbsolutePosition.Y) / PWValue.AbsoluteSize.Y, 0, 1)
@@ -2163,7 +2409,7 @@ function Library:CreateWindow(options)
                                 end
                             end
                         end)
-
+                        
                         local Close = Instance.new("TextButton")
                         Close.Parent = PickerWindow
                         Close.Text = "X"
@@ -2179,14 +2425,14 @@ function Library:CreateWindow(options)
                             Library.IsDraggingColorPicker = false
                             SetAllScrollingEnabledFast(true)
                         end)
-
+                        
                         PWVCursor.Position = UDim2.new(0, 0, 1 - pV, -1)
                         PWSCursor.Position = UDim2.new(pH, -2, 1 - pS, -2)
                         UpdatePW()
                     end
                 end)
             end
-
+            
             table.insert(Library.Components.MultiColorPickers, {
                 Flag = Flag,
                 UpdateFn = function(values, fromConfig)
@@ -2219,308 +2465,236 @@ function Library:CreateWindow(options)
                     end
                     Library.Flags[Flag] = SelectedColors
                     if fromConfig then
-                        task.spawn(function() pcall(Callback, SelectedColors) end)
+                        task.spawn(function()
+                            pcall(Callback, SelectedColors)
+                        end)
                     end
                 end
             })
         end
-
+        
         return Tab
     end
-
+    
     -- =========================================================
-    -- FUNÇÃO PARA CRIAR A TAB DE CONFIGURAÇÃO (SEMPRE POR ÚLTIMO)
+    -- CONFIG TAB (SEMPRE POR ÚLTIMO)
     -- =========================================================
-
-    local function CreateConfigTab()
-        -- Verifica se já existe uma tab Config
-        local existingConfigTab = nil
-        for _, tab in pairs(Library.Tabs) do
-            if tab.Button and tab.Button.Name == "Config" then
-                existingConfigTab = tab
-                break
+    
+    local ConfigTab = Window:CreateTab({
+        Name = "Config",
+        Icon = "rbxassetid://114459453255031"
+    })
+    
+    Library.ConfigTab = ConfigTab
+    
+    -- NOVO: Move Config para o final
+    local function MoveConfigToLast()
+        if not Library.ConfigTab then
+            return
+        end
+        
+        local configButton = Library.ConfigTab.Button
+        if configButton then
+            configButton.LayoutOrder = 999999
+        end
+        
+        for _, tabData in ipairs(Library.TabDefinitions) do
+            if tabData.Name == "Config" then
+                tabData.LayoutOrder = 999999
+                tabData.IsConfig = true
             end
         end
-
-        -- Se não existir, cria
-        if not existingConfigTab then
-            local ConfigTab = Window:CreateTab({
-                Name = "Config",
-                Icon = "rbxassetid://77339688042239" -- Ícone de engrenagem para config
-            })
-
-            if ConfigTab then
-                Library.ConfigTab = ConfigTab
-
-                -- Seção de Cores do Fundo com ícones descritivos
-                ConfigTab:AddParagraph({
-                    Title = "🎨 Cores do Fundo",
-                    Content = "Personalize as cores de fundo do menu e painéis",
-                    Side = "Main1"
-                })
-
-                ConfigTab:AddColorPicker({
-                    Text = "🖥️ Fundo do Menu",
-                    Default = Library.Theme.MenuBackground,
-                    Side = "Main1",
-                    Flag = "Config_MenuBackground",
-                    Callback = function(color)
-                        Library.Theme.MenuBackground = color
-                        ApplyThemeColors()
-                    end
-                })
-
-                ConfigTab:AddColorPicker({
-                    Text = "📋 Fundo dos Painéis",
-                    Default = Library.Theme.MainBackground,
-                    Side = "Main1",
-                    Flag = "Config_MainBackground",
-                    Callback = function(color)
-                        Library.Theme.MainBackground = color
-                        ApplyThemeColors()
-                    end
-                })
-
-                ConfigTab:AddColorPicker({
-                    Text = "📦 Fundo Dropdowns",
-                    Default = Library.Theme.DropdownBackground,
-                    Side = "Main1",
-                    Flag = "Config_DropdownBackground",
-                    Callback = function(color)
-                        Library.Theme.DropdownBackground = color
-                        ApplyThemeColors()
-                    end
-                })
-
-                ConfigTab:AddSeparator("Main1")
-
-                -- Seção de Cores do Texto com ícones descritivos
-                ConfigTab:AddParagraph({
-                    Title = "📝 Cores do Texto",
-                    Content = "Personalize as cores dos diferentes tipos de texto",
-                    Side = "Main1"
-                })
-
-                ConfigTab:AddColorPicker({
-                    Text = "🏷️ Título de Seções",
-                    Default = Library.Theme.SectionText,
-                    Side = "Main1",
-                    Flag = "Config_SectionText",
-                    Callback = function(color)
-                        Library.Theme.SectionText = color
-                        ApplyThemeColors()
-                    end
-                })
-
-                ConfigTab:AddColorPicker({
-                    Text = "📄 Texto Principal",
-                    Default = Library.Theme.PrimaryText,
-                    Side = "Main1",
-                    Flag = "Config_PrimaryText",
-                    Callback = function(color)
-                        Library.Theme.PrimaryText = color
-                        ApplyThemeColors()
-                    end
-                })
-
-                ConfigTab:AddColorPicker({
-                    Text = "📎 Texto Secundário",
-                    Default = Library.Theme.SecondaryTextColor,
-                    Side = "Main1",
-                    Flag = "Config_SecondaryText",
-                    Callback = function(color)
-                        Library.Theme.SecondaryTextColor = color
-                        ApplyThemeColors()
-                    end
-                })
-
-                ConfigTab:AddSeparator("Main1")
-
-                -- Cor de destaque
-                ConfigTab:AddParagraph({
-                    Title = "✨ Cor de Destaque",
-                    Content = "Cor principal usada em botões, toggles e sliders",
-                    Side = "Main1"
-                })
-
-                ConfigTab:AddColorPicker({
-                    Text = "🌟 Accent / Destaque",
-                    Default = Library.Theme.Accent,
-                    Side = "Main1",
-                    Flag = "Config_Accent",
-                    Callback = function(color)
-                        Library.Theme.Accent = color
-                        ApplyThemeColors()
-                    end
-                })
-
-                -- Seção de Configurações (Main2)
-                ConfigTab:AddParagraph({
-                    Title = "💾 Gerenciar Configurações",
-                    Content = "Salve, carregue e gerencie suas configurações",
-                    Side = "Main2"
-                })
-
-                local CurrentConfigName = ""
-
-                ConfigTab:AddTextbox({
-                    Text = "Nome da Config",
-                    Placeholder = "Digite o nome...",
-                    Side = "Main2",
-                    Flag = "ConfigName",
-                    Callback = function(text)
-                        CurrentConfigName = text
-                    end
-                })
-
-                local ConfigDropdown
-                local function RefreshConfigDropdown()
-                    local names = GetConfigNames()
-                    if ConfigDropdown and ConfigDropdown.SetList then
-                        ConfigDropdown:SetList(names)
-                    end
-                    return names
-                end
-
-                ConfigDropdown = ConfigTab:AddDropdown({
-                    Text = "Configs Salvas",
-                    List = GetConfigNames(),
-                    Default = nil,
-                    Side = "Main2",
-                    Flag = "SelectedConfig",
-                    Callback = function(name)
-                        if name then
-                            CurrentConfigName = tostring(name)
-                        end
-                    end
-                })
-
-                ConfigTab:AddButton({
-                    Text = "💾 Salvar Config",
-                    Side = "Main2",
-                    Callback = function()
-                        local name = tostring(CurrentConfigName or "")
-                        if name:gsub("%s", "") == "" then
-                            Window:Notify({ Title = "Configuração", Content = "Digite um nome para a configuração!", Duration = 3 })
-                            return
-                        end
-                        local success, err = SaveLocalConfig(name, Library.Flags)
-                        if success then
-                            Window:Notify({ Title = "Configuração", Content = "Config '" .. name .. "' salva!", Duration = 3 })
-                            RefreshConfigDropdown()
-                        else
-                            Window:Notify({ Title = "Erro", Content = tostring(err), Duration = 3 })
-                        end
-                    end
-                })
-
-                ConfigTab:AddButton({
-                    Text = "📂 Carregar Config",
-                    Side = "Main2",
-                    Callback = function()
-                        local name = tostring(CurrentConfigName or "")
-                        if name:gsub("%s", "") == "" then
-                            Window:Notify({ Title = "Configuração", Content = "Selecione uma configuração!", Duration = 3 })
-                            return
-                        end
-                        local data = LoadLocalConfig(name)
-                        if not data then
-                            Window:Notify({ Title = "Configuração", Content = "Configuração não encontrada!", Duration = 3 })
-                            return
-                        end
-                        ApplyLoadedConfig(data)
-                        Window:Notify({ Title = "Configuração", Content = "Config '" .. name .. "' carregada!", Duration = 3 })
-                    end
-                })
-
-                ConfigTab:AddButton({
-                    Text = "📋 Exportar JSON",
-                    Side = "Main2",
-                    Callback = function()
-                        local json = EncodeConfig(Library.Flags)
-                        if setclipboard then
-                            setclipboard(json)
-                            Window:Notify({ Title = "JSON", Content = "JSON completo copiado!", Duration = 3 })
-                        else
-                            Window:Notify({ Title = "JSON", Content = json, Duration = 8 })
-                        end
-                    end
-                })
-
-                ConfigTab:AddButton({
-                    Text = "📥 Importar JSON",
-                    Side = "Main2",
-                    Callback = function()
-                        if not getclipboard then
-                            Window:Notify({ Title = "Erro", Content = "getclipboard não disponível!", Duration = 3 })
-                            return
-                        end
-                        local json = getclipboard()
-                        if not json or json == "" then
-                            Window:Notify({ Title = "Erro", Content = "Clipboard vazio!", Duration = 3 })
-                            return
-                        end
-                        local data = DecodeConfig(json)
-                        if not data then
-                            Window:Notify({ Title = "Erro", Content = "JSON inválido!", Duration = 3 })
-                            return
-                        end
-                        ApplyLoadedConfig(data)
-                        Window:Notify({ Title = "JSON", Content = "JSON importado e aplicado!", Duration = 3 })
-                    end
-                })
-
-                ConfigTab:AddButton({
-                    Text = "🗑️ Excluir Config",
-                    Side = "Main2",
-                    Callback = function()
-                        local name = tostring(CurrentConfigName or "")
-                        if name:gsub("%s", "") == "" then
-                            Window:Notify({ Title = "Configuração", Content = "Selecione uma configuração!", Duration = 3 })
-                            return
-                        end
-                        local success = DeleteLocalConfig(name)
-                        if success then
-                            Window:Notify({ Title = "Configuração", Content = "Config '" .. name .. "' excluída!", Duration = 3 })
-                            CurrentConfigName = ""
-                            RefreshConfigDropdown()
-                        else
-                            Window:Notify({ Title = "Erro", Content = "Não foi possível excluir!", Duration = 3 })
-                        end
-                    end
-                })
-
-                -- Ordena as tabs para garantir que Config fique por último
-                -- Move o botão da Config para o final
-                local configTabData = nil
-                for i, tab in ipairs(Library.Tabs) do
-                    if tab.Button and tab.Button.Name == "Config" then
-                        configTabData = tab
-                        table.remove(Library.Tabs, i)
-                        break
-                    end
-                end
-
-                if configTabData then
-                    table.insert(Library.Tabs, configTabData)
-                end
-
-                UpdateTabsVisibility()
+        
+        if TabsContainer then
+            TabsContainer.LayoutOrder = 1
+        end
+        
+        if TabsScrolling then
+            TabsScrolling.LayoutOrder = 1
+        end
+        
+        task.defer(function()
+            UpdateTabsVisibility()
+            UpdateTabsCanvas()
+        end)
+    end
+    
+    -- Config Tab Components
+    ConfigTab:AddSection({ Text = "Cores do Fundo", Side = "Main1" })
+    
+    ConfigTab:AddColorPicker({
+        Text = "Fundo do Menu", Default = Library.Theme.MenuBackground, Side = "Main1",
+        Flag = "Config_MenuBackground",
+        Callback = function(color) Library.Theme.MenuBackground = color; ApplyThemeColors() end
+    })
+    
+    ConfigTab:AddColorPicker({
+        Text = "Fundo dos Mains", Default = Library.Theme.MainBackground, Side = "Main1",
+        Flag = "Config_MainBackground",
+        Callback = function(color) Library.Theme.MainBackground = color; ApplyThemeColors() end
+    })
+    
+    ConfigTab:AddSeparator("Main1")
+    ConfigTab:AddSection({ Text = "Cores do Texto", Side = "Main1" })
+    
+    ConfigTab:AddColorPicker({
+        Text = "Section Text", Default = Library.Theme.SectionText, Side = "Main1",
+        Flag = "Config_SectionText",
+        Callback = function(color) Library.Theme.SectionText = color; ApplyThemeColors() end
+    })
+    
+    ConfigTab:AddColorPicker({
+        Text = "Primary Text", Default = Library.Theme.PrimaryText, Side = "Main1",
+        Flag = "Config_PrimaryText",
+        Callback = function(color) Library.Theme.PrimaryText = color; ApplyThemeColors() end
+    })
+    
+    ConfigTab:AddColorPicker({
+        Text = "Secondary Text", Default = Library.Theme.SecondaryTextColor, Side = "Main1",
+        Flag = "Config_SecondaryText",
+        Callback = function(color) Library.Theme.SecondaryTextColor = color; ApplyThemeColors() end
+    })
+    
+    ConfigTab:AddSeparator("Main1")
+    
+    ConfigTab:AddColorPicker({
+        Text = "Accent", Default = Library.Theme.Accent, Side = "Main1",
+        Flag = "Config_Accent",
+        Callback = function(color)
+            Library.Theme.Accent = color
+            ApplyThemeColors()
+        end
+    })
+    
+    ConfigTab:AddSection({ Text = "Configurações", Side = "Main2" })
+    
+    local CurrentConfigName = ""
+    
+    ConfigTab:AddTextbox({
+        Text = "Nome da Config", Placeholder = "Digite o nome...", Side = "Main2",
+        Flag = "ConfigName",
+        Callback = function(text) CurrentConfigName = text end
+    })
+    
+    local ConfigDropdown
+    local function RefreshConfigDropdown()
+        local names = GetConfigNames()
+        if ConfigDropdown and ConfigDropdown.SetList then
+            ConfigDropdown:SetList(names)
+        end
+        return names
+    end
+    
+    ConfigDropdown = ConfigTab:AddDropdown({
+        Text = "Configs Salvas", List = GetConfigNames(), Default = nil, Side = "Main2",
+        Flag = "SelectedConfig",
+        Callback = function(name) if name then CurrentConfigName = tostring(name) end end
+    })
+    
+    -- NOVO: Salvar com config completa
+    ConfigTab:AddButton({
+        Text = "Salvar Config", Side = "Main2",
+        Callback = function()
+            local name = tostring(CurrentConfigName or "")
+            if name:gsub("%s", "") == "" then
+                Window:Notify({ Title = "Configuração", Content = "Digite um nome para a configuração!", Duration = 3 })
+                return
+            end
+            local success, err = SaveCompleteConfig(name, BuildConfigData())
+            if success then
+                Window:Notify({ Title = "Configuração", Content = "Config '" .. name .. "' salva!", Duration = 3 })
+                RefreshConfigDropdown()
+            else
+                Window:Notify({ Title = "Erro", Content = tostring(err), Duration = 3 })
             end
         end
-    end
-
-    -- Garante que a Config Tab seja criada como última tab
-    local originalCreateTab = Window.CreateTab
-    Window.CreateTab = function(self, tabOptions)
-        if tabOptions.Name == "Config" then
-            -- Armazena para criar depois que todas as outras tabs forem criadas
-            self.PendingConfigTab = tabOptions
-            return nil
+    })
+    
+    -- NOVO: Carregar com config completa
+    ConfigTab:AddButton({
+        Text = "Carregar Config", Side = "Main2",
+        Callback = function()
+            local name = tostring(CurrentConfigName or "")
+            if name:gsub("%s", "") == "" then
+                Window:Notify({ Title = "Configuração", Content = "Selecione uma configuração!", Duration = 3 })
+                return
+            end
+            local data = LoadCompleteConfig(name)
+            if not data then
+                Window:Notify({ Title = "Configuração", Content = "Configuração não encontrada!", Duration = 3 })
+                return
+            end
+            
+            -- Compatibilidade com arquivos antigos
+            if data.Flags then
+                ApplyCompleteConfig(data)
+            else
+                ApplyLoadedConfig(data)
+            end
+            
+            Window:Notify({ Title = "Configuração", Content = "Config '" .. name .. "' carregada!", Duration = 3 })
         end
-        return originalCreateTab(self, tabOptions)
-    end
-
+    })
+    
+    -- NOVO: Exportar JSON completo
+    ConfigTab:AddButton({
+        Text = "Exportar JSON", Side = "Main2",
+        Callback = function()
+            local json = EncodeCompleteConfig()
+            if setclipboard then
+                setclipboard(json)
+                Window:Notify({ Title = "JSON", Content = "Configuração completa copiada!", Duration = 3 })
+            else
+                Window:Notify({ Title = "JSON", Content = json, Duration = 8 })
+            end
+        end
+    })
+    
+    -- NOVO: Importar JSON completo
+    ConfigTab:AddButton({
+        Text = "Importar JSON", Side = "Main2",
+        Callback = function()
+            if not getclipboard then
+                Window:Notify({ Title = "Erro", Content = "getclipboard não disponível!", Duration = 3 })
+                return
+            end
+            local json = getclipboard()
+            if not json or json == "" then
+                Window:Notify({ Title = "Erro", Content = "Clipboard vazio!", Duration = 3 })
+                return
+            end
+            local data = DecodeCompleteConfig(json)
+            if not data then
+                Window:Notify({ Title = "Erro", Content = "JSON inválido!", Duration = 3 })
+                return
+            end
+            ApplyCompleteConfig(data)
+            Window:Notify({ Title = "JSON", Content = "Configuração completa importada!", Duration = 3 })
+        end
+    })
+    
+    ConfigTab:AddButton({
+        Text = "Excluir Config", Side = "Main2",
+        Callback = function()
+            local name = tostring(CurrentConfigName or "")
+            if name:gsub("%s", "") == "" then
+                Window:Notify({ Title = "Configuração", Content = "Selecione uma configuração!", Duration = 3 })
+                return
+            end
+            local success = DeleteLocalConfig(name)
+            if success then
+                Window:Notify({ Title = "Configuração", Content = "Config '" .. name .. "' excluída!", Duration = 3 })
+                CurrentConfigName = ""
+                RefreshConfigDropdown()
+            else
+                Window:Notify({ Title = "Erro", Content = "Não foi possível excluir!", Duration = 3 })
+            end
+        end
+    })
+    
+    -- Move Config para última posição
+    MoveConfigToLast()
+    
     function Window:Notify(notifOptions)
         local Title, Content, Duration = notifOptions.Title or "Notification", notifOptions.Content or "", notifOptions.Duration or 5
         local NotifFrame = Instance.new("Frame")
@@ -2540,44 +2714,14 @@ function Library:CreateWindow(options)
         Library:Tween(NotifFrame, {Position = UDim2.new(1, -260, 1, -100)})
         task.delay(Duration, function() Library:Tween(NotifFrame, {Position = UDim2.new(1, 10, 1, -100)}, function() NotifFrame:Destroy() end) end)
     end
-
-    -- Sobrescreve o Notify original para garantir que esteja disponível
-    Window.Notify = function(notifOptions)
-        local Title, Content, Duration = notifOptions.Title or "Notification", notifOptions.Content or "", notifOptions.Duration or 5
-        local NotifFrame = Instance.new("Frame")
-        NotifFrame.Parent = ScreenGui
-        NotifFrame.BackgroundColor3 = Library.Theme.Main
-        NotifFrame.Position = UDim2.new(1, 10, 1, -100)
-        NotifFrame.Size = UDim2.new(0, 250, 0, 80)
-        local NCorner = Instance.new("UICorner"); NCorner.Parent = NotifFrame
-        local NStroke = Instance.new("UIStroke"); NStroke.Color = Library.Theme.Accent; NStroke.Thickness = 1; NStroke.Parent = NotifFrame
-        local NTitle = Instance.new("TextLabel")
-        NTitle.Parent = NotifFrame; NTitle.BackgroundTransparency = 1; NTitle.Position = UDim2.new(0, 10, 0, 5); NTitle.Size = UDim2.new(1, -20, 0, 20); NTitle.Text = Title
-        NTitle.TextColor3 = Library.Theme.Accent; NTitle.TextSize = 15; NTitle.TextXAlignment = Enum.TextXAlignment.Left; NTitle.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Bold)
-        local NContent = Instance.new("TextLabel")
-        NContent.Parent = NotifFrame; NContent.BackgroundTransparency = 1; NContent.Position = UDim2.new(0, 10, 0, 30); NContent.Size = UDim2.new(1, -20, 0, 40); NContent.Text = Content
-        NContent.TextColor3 = Library.Theme.Text; NContent.TextSize = 13; NContent.TextXAlignment = Enum.TextXAlignment.Left; NContent.TextYAlignment = Enum.TextYAlignment.Top; NContent.TextWrapped = true
-        NContent.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-        Library:Tween(NotifFrame, {Position = UDim2.new(1, -260, 1, -100)})
-        task.delay(Duration, function() Library:Tween(NotifFrame, {Position = UDim2.new(1, 10, 1, -100)}, function() NotifFrame:Destroy() end) end)
-    end
-
-    -- Retorna o Window com um método para finalizar (criar a Config Tab)
-    local FinalWindow = {
-        Window = Window,
-        Finalize = function()
-            -- Cria a Config Tab como última tab
-            CreateConfigTab()
-            return Window
-        end
-    }
-
-    return FinalWindow
+    
+    return Window
 end
 
 -- =========================================================
--- MÉTODOS GLOBAIS
+-- MÉTODOS PÚBLICOS ATUALIZADOS
 -- =========================================================
+
 function Library:SetTheme(newTheme)
     if type(newTheme) ~= "table" then return end
     for i, v in pairs(newTheme) do
@@ -2589,35 +2733,33 @@ function Library:SetTheme(newTheme)
 end
 
 function Library:SaveConfig(name)
-    if not name or tostring(name):gsub("%s", "") == "" then return false end
-    local success = SaveLocalConfig(name, Library.Flags)
-    if success then
-        SaveToDataStore(Library.Flags)
-        return true
+    if not name or tostring(name):gsub("%s", "") == "" then
+        return false
     end
-    return false
+    return SaveCompleteConfig(name, BuildConfigData())
 end
 
 function Library:LoadConfig(name)
-    local data = LoadLocalConfig(name)
-    if not data then return false end
-    return ApplyLoadedConfig(data) == true
-end
-
-function Library:GetDataStore()
-    return LoadFromDataStore()
+    local data = LoadCompleteConfig(name)
+    if not data then
+        return false
+    end
+    return ApplyCompleteConfig(data) == true
 end
 
 function Library:ExportConfigJSON()
-    return ExportConfigJSON()
+    return EncodeCompleteConfig()
 end
 
 function Library:ImportConfigJSON(jsonString)
-    if type(jsonString) ~= "string" or jsonString == "" then return false end
-    local data = DecodeConfig(jsonString)
-    if not data then return false end
-    ConfigDataStore = data
-    return ApplyLoadedConfig(data) == true
+    if type(jsonString) ~= "string" or jsonString == "" then
+        return false
+    end
+    local data = DecodeCompleteConfig(jsonString)
+    if not data then
+        return false
+    end
+    return ApplyCompleteConfig(data) == true
 end
 
 return Library
