@@ -14,7 +14,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Library = {}
-local Commands = {} -- Tabela para armazenar comandos registrados
+local Commands = {}
 
 -- Instances: 22 | Scripts: 2 | Modules: 0 | Tags: 0
 local LMG2L = {};
@@ -109,14 +109,30 @@ LMG2L["UIStroke_e"]["Color"] = Color3.fromRGB(131, 131, 131);
 LMG2L["UICorner_f"] = Instance.new("UICorner", LMG2L["CommandBar_d"]);
 LMG2L["UICorner_f"]["CornerRadius"] = UDim.new(0, 5);
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Main.Cmds
-LMG2L["Cmds_10"] = Instance.new("Frame", LMG2L["Main_a"]);
-LMG2L["Cmds_10"]["BorderSizePixel"] = 0;
-LMG2L["Cmds_10"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
-LMG2L["Cmds_10"]["Size"] = UDim2.new(0, 286, 0, 318);
-LMG2L["Cmds_10"]["Position"] = UDim2.new(0, 0, 0, 28);
-LMG2L["Cmds_10"]["Name"] = [[Cmds]];
-LMG2L["Cmds_10"]["BackgroundTransparency"] = 1;
+-- Container de comandos que pode virar ScrollingFrame
+local cmdContainer = Instance.new("Frame")
+cmdContainer.Name = "CommandsContainer"
+cmdContainer.BorderSizePixel = 0
+cmdContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+cmdContainer.BackgroundTransparency = 1
+cmdContainer.Size = UDim2.new(1, 0, 1, 0)
+cmdContainer.Position = UDim2.new(0, 0, 0, 28)
+cmdContainer.Parent = LMG2L["Main_a"]
+
+-- ScrollingFrame de backup (escondido inicialmente)
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Name = "ScrollFrame"
+scrollFrame.BorderSizePixel = 0
+scrollFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.Size = UDim2.new(1, 0, 1, -30)
+scrollFrame.Position = UDim2.new(0, 0, 0, 28)
+scrollFrame.ScrollBarThickness = 0 -- Barra invisível
+scrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+scrollFrame.ElasticBehavior = Enum.ElasticBehavior.Never -- Sem efeito elástico
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.Visible = false
+scrollFrame.Parent = LMG2L["Main_a"]
 
 -- Template para comandos
 local function createCommandTemplate(name)
@@ -161,27 +177,77 @@ local function createCommandTemplate(name)
     return cmdFrame
 end
 
--- Criar container para comandos dinâmicos
-local cmdContainer = Instance.new("Frame")
-cmdContainer.Name = "CommandsContainer"
-cmdContainer.BorderSizePixel = 0
-cmdContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-cmdContainer.BackgroundTransparency = 1
-cmdContainer.Size = UDim2.new(1, 0, 1, 0)
-cmdContainer.Parent = LMG2L["Cmds_10"]
+-- Variável para controle
+local commandCount = 0
+local isUsingScroll = false
 
--- Função para atualizar visibilidade dos comandos
+-- Função para verificar e alternar entre Frame e ScrollingFrame
+local function checkScrollNeeded()
+    local totalCommands = #cmdContainer:GetChildren()
+    
+    if totalCommands > 6 and not isUsingScroll then
+        -- Mudar para ScrollingFrame
+        isUsingScroll = true
+        
+        -- Mover todos os comandos para o ScrollingFrame
+        for _, cmd in ipairs(cmdContainer:GetChildren()) do
+            if cmd:IsA("Frame") then
+                cmd.Parent = scrollFrame
+            end
+        end
+        
+        -- Atualizar CanvasSize
+        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalCommands * 54)
+        
+        -- Esconder container normal, mostrar scroll
+        cmdContainer.Visible = false
+        scrollFrame.Visible = true
+        
+    elseif totalCommands <= 6 and isUsingScroll then
+        -- Voltar para Frame normal
+        isUsingScroll = false
+        
+        -- Mover comandos de volta
+        for _, cmd in ipairs(scrollFrame:GetChildren()) do
+            if cmd:IsA("Frame") then
+                cmd.Parent = cmdContainer
+            end
+        end
+        
+        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+        
+        -- Mostrar container normal, esconder scroll
+        cmdContainer.Visible = true
+        scrollFrame.Visible = false
+    end
+end
+
+-- Função para atualizar visibilidade dos comandos (pesquisa por Title E Description)
 local function filterCommands(searchText)
     local visibleCount = 0
-    for _, cmdFrame in ipairs(cmdContainer:GetChildren()) do
+    local currentContainer = isUsingScroll and scrollFrame or cmdContainer
+    
+    for _, cmdFrame in ipairs(currentContainer:GetChildren()) do
         if cmdFrame:IsA("Frame") then
             local title = cmdFrame:FindFirstChild("Title")
-            if title then
+            local description = cmdFrame:FindFirstChild("Description")
+            
+            if title and description then
+                local searchLower = string.lower(searchText)
+                local titleLower = string.lower(title.Text)
+                local descLower = string.lower(description.Text)
+                
+                -- Pesquisa tanto no Title quanto na Description
+                local foundInTitle = string.find(titleLower, searchLower, 1, true)
+                local foundInDesc = string.find(descLower, searchLower, 1, true)
+                
                 if searchText == "" then
+                    -- Se não tem texto, mostra todos
                     cmdFrame.Visible = true
                     cmdFrame.Position = UDim2.new(0, 2, 0, visibleCount * 54)
                     visibleCount = visibleCount + 1
-                elseif string.find(string.lower(title.Text), string.lower(searchText), 1, true) then
+                elseif foundInTitle or foundInDesc then
+                    -- Se encontrou no Title OU Description
                     cmdFrame.Visible = true
                     cmdFrame.Position = UDim2.new(0, 2, 0, visibleCount * 54)
                     visibleCount = visibleCount + 1
@@ -190,6 +256,11 @@ local function filterCommands(searchText)
                 end
             end
         end
+    end
+    
+    -- Atualizar CanvasSize se estiver usando scroll
+    if isUsingScroll then
+        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, visibleCount * 54)
     end
 end
 
@@ -215,13 +286,19 @@ LMG2L["CommandBar_d"].FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- Função para registrar comandos via loadstring
+-- Função para registrar comandos
 function Library:RegisterCommand(name, description, callback)
     local cmdFrame = createCommandTemplate(name)
     cmdFrame:FindFirstChild("Title").Text = name
     cmdFrame:FindFirstChild("Description").Text = description
     cmdFrame.Visible = true
-    cmdFrame.Parent = cmdContainer
+    
+    -- Adicionar ao container atual
+    if isUsingScroll then
+        cmdFrame.Parent = scrollFrame
+    else
+        cmdFrame.Parent = cmdContainer
+    end
     
     Commands[string.lower(name)] = {
         name = name,
@@ -229,7 +306,10 @@ function Library:RegisterCommand(name, description, callback)
         callback = callback
     }
     
-    -- Reordenar todos os comandos
+    -- Verificar se precisa ativar scroll
+    checkScrollNeeded()
+    
+    -- Reordenar comandos
     filterCommands(LMG2L["CommandBar_d"].Text)
     
     return cmdFrame
