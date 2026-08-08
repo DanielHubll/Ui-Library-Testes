@@ -2053,7 +2053,7 @@ function Library:CreateWindow(options)
     SatBrilhoImg.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     SatBrilhoImg.Position = UDim2.new(0, 10, 0, 5)
     SatBrilhoImg.Size = UDim2.new(0, 150, 0, 120)
-    SatBrilhoImg.Image = "rbxassetid://4155801252" -- Asset do bloco S+B
+    SatBrilhoImg.Image = "rbxassetid://4155801252"
     local SBCorner = Instance.new("UICorner"); SBCorner.Parent = SatBrilhoImg
     
     local SBCursor = Instance.new("Frame")
@@ -2071,7 +2071,6 @@ function Library:CreateWindow(options)
     HueBar.Size = UDim2.new(0, 15, 0, 120)
     local HCorner = Instance.new("UICorner"); HCorner.Parent = HueBar
     
-    -- NOVO: GradientSequence com as cores especificadas
     local HueGradient = Instance.new("UIGradient")
     HueGradient.Rotation = 90
     HueGradient.Color = ColorSequence.new({
@@ -2106,7 +2105,6 @@ function Library:CreateWindow(options)
     local LastColor = nil
     local LastUpdate = 0
     
-    -- Atualiza a cor de fundo do bloco S+B baseado no H atual
     local function UpdateSatBrilhoBackground()
         SatBrilhoImg.BackgroundColor3 = Color3.fromHSV(H, 1, 1)
     end
@@ -2129,9 +2127,9 @@ function Library:CreateWindow(options)
         H, S, V = color:ToHSV()
         ColorDisplay.BackgroundColor3 = color
         UpdateSatBrilhoBackground()
-        -- H na barra lateral (vertical, 0 = topo = H=1, 1 = baixo = H=0)
-        HCursor.Position = UDim2.new(0, 0, 1 - H, -1)
-        -- S+B no bloco: X = Saturação, Y = Brilho (invertido)
+        -- H na barra: posição Y = H (0 = topo, 1 = baixo)
+        HCursor.Position = UDim2.new(0, 0, H, -1)
+        -- S+B: X = Saturação, Y = 1 - Brilho (topo = brilho máximo)
         SBCursor.Position = UDim2.new(S, -3, 1 - V, -3)
         Library.Flags[Flag] = color
         LastColor = color
@@ -2160,7 +2158,6 @@ function Library:CreateWindow(options)
     
     local HDragging, SBDragging = false, false
     
-    -- Hue Bar (Barra lateral)
     HueBar.InputBegan:Connect(function(input)
         if Library.IsDraggingWindow then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -2170,7 +2167,6 @@ function Library:CreateWindow(options)
         end
     end)
     
-    -- Sat/Brilho (Bloco do meio)
     SatBrilhoImg.InputBegan:Connect(function(input)
         if Library.IsDraggingWindow then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -2193,15 +2189,14 @@ function Library:CreateWindow(options)
     
     RegisterInputConnection(function(input)
         if HDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            -- H na barra: Y vai de 0 (topo) a 1 (baixo) -> H = 1 - Y
+            -- CORRIGIDO: H = posição Y (0 no topo = vermelho, 1 embaixo = vermelho)
             local y = math.clamp((input.Position.Y - HueBar.AbsolutePosition.Y) / HueBar.AbsoluteSize.Y, 0, 1)
-            if math.abs(H - (1 - y)) > 0.001 then
-                H = 1 - y
+            if math.abs(H - y) > 0.001 then
+                H = y
                 HCursor.Position = UDim2.new(0, 0, y, -1)
                 UpdateColor()
             end
         elseif SBDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            -- S+B: X = Saturação, Y = Brilho (invertido: Y=0 = V=1)
             local x = math.clamp((input.Position.X - SatBrilhoImg.AbsolutePosition.X) / SatBrilhoImg.AbsoluteSize.X, 0, 1)
             local y = math.clamp((input.Position.Y - SatBrilhoImg.AbsolutePosition.Y) / SatBrilhoImg.AbsoluteSize.Y, 0, 1)
             if math.abs(S - x) > 0.001 or math.abs(V - (1 - y)) > 0.001 then
@@ -2215,7 +2210,7 @@ function Library:CreateWindow(options)
     
     -- Posições iniciais
     UpdateSatBrilhoBackground()
-    HCursor.Position = UDim2.new(0, 0, 1 - H, -1)
+    HCursor.Position = UDim2.new(0, 0, H, -1) -- CORRIGIDO
     SBCursor.Position = UDim2.new(S, -3, 1 - V, -3)
     UpdateColor()
     
