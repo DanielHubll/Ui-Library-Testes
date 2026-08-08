@@ -591,103 +591,128 @@ function Library:CreateWindow(options)
         end  
 
         function Tab:AddDropdown(drpOptions)  
-            local Text = drpOptions.Text or "Dropdown"  
-            local List = drpOptions.List or {}  
-            local Side = drpOptions.Side or "Main1"  
-            local Callback = drpOptions.Callback or function() end  
-            local Flag = drpOptions.Flag or Text  
-            local targetMain = self:GetMain(Side)  
+    local Text = drpOptions.Text or "Dropdown"  
+    local List = drpOptions.List or {}  
+    local Default = drpOptions.Default or nil  -- ADICIONADO: parâmetro Default
+    local Side = drpOptions.Side or "Main1"  
+    local Callback = drpOptions.Callback or function() end  
+    local Flag = drpOptions.Flag or Text  
+    local targetMain = self:GetMain(Side)  
 
-            local DropdownFrame = Instance.new("Frame")  
-            DropdownFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)  
-            DropdownFrame.Size = UDim2.new(0, 194, 0, 34)  
-            DropdownFrame.ClipsDescendants = true  
-            DropdownFrame.Parent = targetMain  
-            local DCorner = Instance.new("UICorner"); DCorner.Parent = DropdownFrame  
+    local DropdownFrame = Instance.new("Frame")  
+    DropdownFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)  
+    DropdownFrame.Size = UDim2.new(0, 194, 0, 34)  
+    DropdownFrame.ClipsDescendants = true  
+    DropdownFrame.Parent = targetMain  
+    local DCorner = Instance.new("UICorner"); DCorner.Parent = DropdownFrame  
 
-            local Title = Instance.new("TextLabel")  
-            Title.Parent = DropdownFrame  
-            Title.BackgroundTransparency = 1  
-            Title.Position = UDim2.new(0, 10, 0, 0)  
-            Title.Size = UDim2.new(1, -40, 0, 34)  
-            Title.Text = Text  
-            Title.TextColor3 = Library.Theme.Text  
-            Title.TextSize = 14  
-            Title.TextXAlignment = Enum.TextXAlignment.Left  
-            Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
+    local Title = Instance.new("TextLabel")  
+    Title.Parent = DropdownFrame  
+    Title.BackgroundTransparency = 1  
+    Title.Position = UDim2.new(0, 10, 0, 0)  
+    Title.Size = UDim2.new(1, -40, 0, 34)  
+    Title.Text = Text  
+    Title.TextColor3 = Library.Theme.Text  
+    Title.TextSize = 14  
+    Title.TextXAlignment = Enum.TextXAlignment.Left  
+    Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
 
-            local Arrow = Instance.new("ImageLabel")  
-            Arrow.Parent = DropdownFrame  
-            Arrow.BackgroundTransparency = 1  
-            Arrow.Position = UDim2.new(1, -30, 0, 7)  
-            Arrow.Size = UDim2.new(0, 20, 0, 20)  
-            Arrow.Image = "rbxassetid://6034818372"  
+    local Arrow = Instance.new("ImageLabel")  
+    Arrow.Parent = DropdownFrame  
+    Arrow.BackgroundTransparency = 1  
+    Arrow.Position = UDim2.new(1, -30, 0, 7)  
+    Arrow.Size = UDim2.new(0, 20, 0, 20)  
+    Arrow.Image = "rbxassetid://6034818372"  
 
-            local ListFrame = Instance.new("Frame")  
-            ListFrame.Parent = DropdownFrame  
-            ListFrame.BackgroundTransparency = 1  
-            ListFrame.Position = UDim2.new(0, 0, 0, 34)  
-            ListFrame.Size = UDim2.new(1, 0, 0, #List * 30)  
-            local ListLayout = Instance.new("UIListLayout"); ListLayout.Parent = ListFrame  
+    local ListFrame = Instance.new("Frame")  
+    ListFrame.Parent = DropdownFrame  
+    ListFrame.BackgroundTransparency = 1  
+    ListFrame.Position = UDim2.new(0, 0, 0, 34)  
+    ListFrame.Size = UDim2.new(1, 0, 0, #List * 30)  
+    local ListLayout = Instance.new("UIListLayout"); ListLayout.Parent = ListFrame  
 
-            local DropdownData = {  
-                Opened = false,  
-                Frame = DropdownFrame,  
-                Arrow = Arrow,  
-                ClosedSize = UDim2.new(0, 194, 0, 34)  
-            }  
+    local DropdownData = {  
+        Opened = false,  
+        Frame = DropdownFrame,  
+        Arrow = Arrow,  
+        ClosedSize = UDim2.new(0, 194, 0, 34)  
+    }  
 
-            local function Toggle()  
-                if Library.IsDraggingWindow then return end  
-                DropdownData.Opened = not DropdownData.Opened  
+    -- FUNÇÃO PARA APLICAR O VALOR PADRÃO
+    local function SetDefault(value)
+        if value then
+            -- Verifica se o valor existe na lista
+            local found = false
+            for _, item in ipairs(List) do
+                if tostring(item) == tostring(value) then
+                    found = true
+                    break
+                end
+            end
+            
+            if found then
+                Title.Text = Text .. ": " .. tostring(value)
+                Library.Flags[Flag] = value
+            end
+        end
+    end
 
-                if DropdownData.Opened then  
-                    RegisterOpenDropdown(DropdownData)  
-                else  
-                    for i, d in ipairs(Library.OpenDropdowns) do  
-                        if d == DropdownData then  
-                            table.remove(Library.OpenDropdowns, i)  
-                            break  
-                        end  
-                    end  
+    -- Aplica o valor padrão se existir
+    if Default ~= nil then
+        SetDefault(Default)
+    end
+
+    local function Toggle()  
+        if Library.IsDraggingWindow then return end  
+        DropdownData.Opened = not DropdownData.Opened  
+
+        if DropdownData.Opened then  
+            RegisterOpenDropdown(DropdownData)  
+        else  
+            for i, d in ipairs(Library.OpenDropdowns) do  
+                if d == DropdownData then  
+                    table.remove(Library.OpenDropdowns, i)  
+                    break  
                 end  
-
-                local targetSize = DropdownData.Opened and UDim2.new(0, 194, 0, 34 + (#List * 30)) or UDim2.new(0, 194, 0, 34)  
-                Library:Tween(DropdownFrame, {Size = targetSize})  
-                Library:Tween(Arrow, {Rotation = DropdownData.Opened and 180 or 0})  
-            end  
-
-            DropdownFrame.InputBegan:Connect(function(input)  
-                if Library.IsDraggingWindow then return end  
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then Toggle() end  
-            end)  
-
-            for _, v in pairs(List) do  
-                local Item = Instance.new("TextButton")  
-                Item.Parent = ListFrame  
-                Item.BackgroundColor3 = Color3.fromRGB(45, 45, 45)  
-                Item.BorderSizePixel = 0  
-                Item.Size = UDim2.new(1, 0, 0, 30)  
-                Item.Text = tostring(v)  
-                Item.TextColor3 = Library.Theme.SecondaryText  
-                Item.TextSize = 13  
-                Item.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
-                Item.MouseButton1Click:Connect(function()  
-                    if Library.IsDraggingWindow then return end  
-                    Title.Text = Text .. ": " .. tostring(v)  
-                    Library.Flags[Flag] = v  
-                    task.spawn(function() Callback(v) end)  
-                    Toggle()  
-                end)  
-                Item.TouchTap:Connect(function()  
-                    if Library.IsDraggingWindow then return end  
-                    Title.Text = Text .. ": " .. tostring(v)  
-                    Library.Flags[Flag] = v  
-                    task.spawn(function() Callback(v) end)  
-                    Toggle()  
-                end)  
             end  
         end  
+
+        local targetSize = DropdownData.Opened and UDim2.new(0, 194, 0, 34 + (#List * 30)) or UDim2.new(0, 194, 0, 34)  
+        Library:Tween(DropdownFrame, {Size = targetSize})  
+        Library:Tween(Arrow, {Rotation = DropdownData.Opened and 180 or 0})  
+    end  
+
+    DropdownFrame.InputBegan:Connect(function(input)  
+        if Library.IsDraggingWindow then return end  
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then Toggle() end  
+    end)  
+
+    for _, v in pairs(List) do  
+        local Item = Instance.new("TextButton")  
+        Item.Parent = ListFrame  
+        Item.BackgroundColor3 = Color3.fromRGB(45, 45, 45)  
+        Item.BorderSizePixel = 0  
+        Item.Size = UDim2.new(1, 0, 0, 30)  
+        Item.Text = tostring(v)  
+        Item.TextColor3 = Library.Theme.SecondaryText  
+        Item.TextSize = 13  
+        Item.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
+        Item.MouseButton1Click:Connect(function()  
+            if Library.IsDraggingWindow then return end  
+            Title.Text = Text .. ": " .. tostring(v)  
+            Library.Flags[Flag] = v  
+            task.spawn(function() Callback(v) end)  
+            Toggle()  
+        end)  
+        Item.TouchTap:Connect(function()  
+            if Library.IsDraggingWindow then return end  
+            Title.Text = Text .. ": " .. tostring(v)  
+            Library.Flags[Flag] = v  
+            task.spawn(function() Callback(v) end)  
+            Toggle()  
+        end)  
+    end  
+end
 
         function Tab:AddTextbox(txtOptions)  
             local Text = txtOptions.Text or "Textbox"  
