@@ -2482,7 +2482,7 @@ function Library:CreateWindow(options)
     
     local ConfigTab = Window:CreateTab({
         Name = "Config",
-        Icon = "rbxassetid://114459453255031"
+        Icon = "rbxassetid://133562986395001"}"
     })
     
     Library.ConfigTab = ConfigTab
