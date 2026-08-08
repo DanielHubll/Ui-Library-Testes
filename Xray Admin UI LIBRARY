@@ -1,13 +1,13 @@
---[=[
+--[[
  d888b  db    db d888888b      .d888b.      db      db    db  .d8b.  
 88' Y8b 88    88   `88'        VP  `8D      88      88    88 d8' `8b 
 88      88    88    88            odD'      88      88    88 88ooo88 
 88  ooo 88    88    88          .88'        88      88    88 88~~~88 
 88. ~8~ 88b  d88   .88.        j88.         88booo. 88b  d88 88   88    @uniquadev
  Y888P  ~Y8888P' Y888888P      888888D      Y88888P ~Y8888P' YP   YP  CONVERTER 
-
-designed using localmaze gui creator
-]=]
+ 
+ -- UI REFATORADA E MODERNIZADA --
+]]
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -16,264 +16,220 @@ local UserInputService = game:GetService("UserInputService")
 local Library = {}
 local Commands = {}
 
--- Instances: 22 | Scripts: 2 | Modules: 0 | Tags: 0
-local LMG2L = {};
+-- Tema Moderno (Dark Theme)
+local Theme = {
+    MainBg = Color3.fromRGB(24, 24, 27),       -- Cinza muito escuro
+    SecondaryBg = Color3.fromRGB(39, 39, 42),  -- Cinza claro (Command Bar / Top)
+    Stroke = Color3.fromRGB(63, 63, 70),       -- Borda padrão
+    Accent = Color3.fromRGB(139, 92, 246),     -- Cor de destaque (Roxo suave)
+    TextPrimary = Color3.fromRGB(250, 250, 250),
+    TextSecondary = Color3.fromRGB(161, 161, 170)
+}
 
--- Players.LocalPlayer.PlayerGui.XrayGui
-LMG2L["XrayGui_1"] = Instance.new("ScreenGui", Players.LocalPlayer:WaitForChild("PlayerGui"));
-LMG2L["XrayGui_1"]["Name"] = [[XrayGui]];
-LMG2L["XrayGui_1"]["ZIndexBehavior"] = Enum.ZIndexBehavior.Sibling;
-LMG2L["XrayGui_1"]["ResetOnSpawn"] = false;
+-- ScreenGui
+local XrayGui = Instance.new("ScreenGui")
+XrayGui.Name = "XrayGui"
+XrayGui.ResetOnSpawn = false
+XrayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+XrayGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Top
-LMG2L["Top_2"] = Instance.new("Frame", LMG2L["XrayGui_1"]);
-LMG2L["Top_2"]["BorderSizePixel"] = 0;
-LMG2L["Top_2"]["BackgroundColor3"] = Color3.fromRGB(0, 0, 0);
-LMG2L["Top_2"]["Size"] = UDim2.new(0, 286, 0, 46);
-LMG2L["Top_2"]["Position"] = UDim2.new(0, 488, 0, 50);
-LMG2L["Top_2"]["Name"] = [[Top]];
-LMG2L["Top_2"]["AnchorPoint"] = Vector2.new(0, 0);
+-- Container Principal (Facilita mover e centralizar a UI)
+local Container = Instance.new("Frame")
+Container.Name = "Container"
+Container.Size = UDim2.new(0, 320, 0, 420)
+Container.Position = UDim2.new(0.5, -160, 0.5, -210) -- Centralizado na tela
+Container.BackgroundTransparency = 1
+Container.Parent = XrayGui
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Top.UICorner
-LMG2L["UICorner_3"] = Instance.new("UICorner", LMG2L["Top_2"]);
+-- Top (Header)
+local Top = Instance.new("Frame")
+Top.Name = "Top"
+Top.Size = UDim2.new(1, 0, 0, 54)
+Top.BackgroundColor3 = Theme.SecondaryBg
+Top.BorderSizePixel = 0
+Top.Parent = Container
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Top.UIStroke
-LMG2L["UIStroke_4"] = Instance.new("UIStroke", LMG2L["Top_2"]);
-LMG2L["UIStroke_4"]["Color"] = Color3.fromRGB(131, 131, 131);
+local TopCorner = Instance.new("UICorner")
+TopCorner.CornerRadius = UDim.new(0, 8)
+TopCorner.Parent = Top
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Top.Thumbnail
-LMG2L["Thumbnail_5"] = Instance.new("ImageLabel", LMG2L["Top_2"]);
-LMG2L["Thumbnail_5"]["BorderSizePixel"] = 0;
-LMG2L["Thumbnail_5"]["BackgroundColor3"] = Color3.fromRGB(0, 0, 0);
-LMG2L["Thumbnail_5"]["Image"] = [[rbxasset://textures/ui/GuiImagePlaceholder.png]];
-LMG2L["Thumbnail_5"]["Size"] = UDim2.new(0, 34, 0, 34);
-LMG2L["Thumbnail_5"]["Name"] = [[Thumbnail]];
-LMG2L["Thumbnail_5"]["Position"] = UDim2.new(0, 6, 0, 6);
+local TopStroke = Instance.new("UIStroke")
+TopStroke.Color = Theme.Stroke
+TopStroke.Parent = Top
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Top.Thumbnail.UICorner
-LMG2L["UICorner_6"] = Instance.new("UICorner", LMG2L["Thumbnail_5"]);
-LMG2L["UICorner_6"]["CornerRadius"] = UDim.new(1, 0);
+-- Avatar (Thumbnail)
+local Thumbnail = Instance.new("ImageLabel")
+Thumbnail.Name = "Thumbnail"
+Thumbnail.Size = UDim2.new(0, 38, 0, 38)
+Thumbnail.Position = UDim2.new(0, 8, 0, 8)
+Thumbnail.BackgroundColor3 = Theme.MainBg
+Thumbnail.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+Thumbnail.Parent = Top
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Top.Name
-LMG2L["Name_8"] = Instance.new("TextLabel", LMG2L["Top_2"]);
-LMG2L["Name_8"]["TextWrapped"] = true;
-LMG2L["Name_8"]["BorderSizePixel"] = 0;
-LMG2L["Name_8"]["TextXAlignment"] = Enum.TextXAlignment.Left;
-LMG2L["Name_8"]["TextScaled"] = true;
-LMG2L["Name_8"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
-LMG2L["Name_8"]["FontFace"] = Font.new([[rbxasset://fonts/families/GothamSSm.json]], Enum.FontWeight.Medium, Enum.FontStyle.Normal);
-LMG2L["Name_8"]["TextColor3"] = Color3.fromRGB(255, 255, 255);
-LMG2L["Name_8"]["BackgroundTransparency"] = 1;
-LMG2L["Name_8"]["Size"] = UDim2.new(0, 78, 0, 20);
-LMG2L["Name_8"]["Text"] = [[Welcome Daniel ]];
-LMG2L["Name_8"]["Name"] = [[Name]];
-LMG2L["Name_8"]["Position"] = UDim2.new(0, 46, 0, 14);
+local ThumbnailCorner = Instance.new("UICorner")
+ThumbnailCorner.CornerRadius = UDim.new(1, 0) -- 100% Redondo
+ThumbnailCorner.Parent = Thumbnail
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Main
-LMG2L["Main_a"] = Instance.new("Frame", LMG2L["XrayGui_1"]);
-LMG2L["Main_a"]["BorderSizePixel"] = 0;
-LMG2L["Main_a"]["BackgroundColor3"] = Color3.fromRGB(0, 0, 0);
-LMG2L["Main_a"]["Size"] = UDim2.new(0, 286, 0, 346);
-LMG2L["Main_a"]["Position"] = UDim2.new(0, 488, 0, 100);
-LMG2L["Main_a"]["Name"] = [[Main]];
-LMG2L["Main_a"]["AnchorPoint"] = Vector2.new(0, 0);
+-- Nome de Boas-vindas
+local NameLabel = Instance.new("TextLabel")
+NameLabel.Name = "Name"
+NameLabel.Size = UDim2.new(1, -60, 1, 0)
+NameLabel.Position = UDim2.new(0, 54, 0, 0)
+NameLabel.BackgroundTransparency = 1
+NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+NameLabel.Font = Enum.Font.GothamMedium
+NameLabel.TextSize = 15 -- Removido o TextScaled para ficar mais limpo
+NameLabel.TextColor3 = Theme.TextPrimary
+NameLabel.Text = "Welcome, Player"
+NameLabel.Parent = Top
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Main.UICorner
-LMG2L["UICorner_b"] = Instance.new("UICorner", LMG2L["Main_a"]);
+-- Main (Corpo da UI)
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.new(1, 0, 1, -62)
+Main.Position = UDim2.new(0, 0, 0, 62)
+Main.BackgroundColor3 = Theme.MainBg
+Main.BorderSizePixel = 0
+Main.Parent = Container
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Main.UIStroke
-LMG2L["UIStroke_c"] = Instance.new("UIStroke", LMG2L["Main_a"]);
-LMG2L["UIStroke_c"]["Color"] = Color3.fromRGB(131, 131, 131);
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = Main
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Main.CommandBar
-LMG2L["CommandBar_d"] = Instance.new("TextBox", LMG2L["Main_a"]);
-LMG2L["CommandBar_d"]["Name"] = [[CommandBar]];
-LMG2L["CommandBar_d"]["PlaceholderColor3"] = Color3.fromRGB(209, 209, 209);
-LMG2L["CommandBar_d"]["BorderSizePixel"] = 0;
-LMG2L["CommandBar_d"]["TextColor3"] = Color3.fromRGB(255, 255, 255);
-LMG2L["CommandBar_d"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
-LMG2L["CommandBar_d"]["PlaceholderText"] = [[Command Bar...]];
-LMG2L["CommandBar_d"]["Size"] = UDim2.new(0, 278, 0, 18);
-LMG2L["CommandBar_d"]["Position"] = UDim2.new(0, 4, 0.02, -2);
-LMG2L["CommandBar_d"]["Text"] = [[]];
-LMG2L["CommandBar_d"]["BackgroundTransparency"] = 1;
-LMG2L["CommandBar_d"]["ClearTextOnFocus"] = false;
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Theme.Stroke
+MainStroke.Parent = Main
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Main.CommandBar.UIStroke
-LMG2L["UIStroke_e"] = Instance.new("UIStroke", LMG2L["CommandBar_d"]);
-LMG2L["UIStroke_e"]["Transparency"] = 0.6;
-LMG2L["UIStroke_e"]["ApplyStrokeMode"] = Enum.ApplyStrokeMode.Border;
-LMG2L["UIStroke_e"]["Color"] = Color3.fromRGB(131, 131, 131);
+-- Command Bar Container
+local SearchContainer = Instance.new("Frame")
+SearchContainer.Name = "SearchContainer"
+SearchContainer.Size = UDim2.new(1, -16, 0, 34)
+SearchContainer.Position = UDim2.new(0, 8, 0, 10)
+SearchContainer.BackgroundColor3 = Theme.SecondaryBg
+SearchContainer.Parent = Main
 
--- Players.LocalPlayer.PlayerGui.XrayGui.Main.CommandBar.UICorner
-LMG2L["UICorner_f"] = Instance.new("UICorner", LMG2L["CommandBar_d"]);
-LMG2L["UICorner_f"]["CornerRadius"] = UDim.new(0, 5);
+local SearchCorner = Instance.new("UICorner")
+SearchCorner.CornerRadius = UDim.new(0, 6)
+SearchCorner.Parent = SearchContainer
 
--- Container de comandos que pode virar ScrollingFrame
-local cmdContainer = Instance.new("Frame")
-cmdContainer.Name = "CommandsContainer"
-cmdContainer.BorderSizePixel = 0
-cmdContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-cmdContainer.BackgroundTransparency = 1
-cmdContainer.Size = UDim2.new(1, 0, 1, 0)
-cmdContainer.Position = UDim2.new(0, 0, 0, 28)
-cmdContainer.Parent = LMG2L["Main_a"]
+local SearchStroke = Instance.new("UIStroke")
+SearchStroke.Color = Theme.Stroke
+SearchStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+SearchStroke.Parent = SearchContainer
 
--- ScrollingFrame de backup (escondido inicialmente)
-local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Name = "ScrollFrame"
-scrollFrame.BorderSizePixel = 0
-scrollFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-scrollFrame.BackgroundTransparency = 1
-scrollFrame.Size = UDim2.new(1, 0, 1, -30)
-scrollFrame.Position = UDim2.new(0, 0, 0, 28)
-scrollFrame.ScrollBarThickness = 0 -- Barra invisível
-scrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
-scrollFrame.ElasticBehavior = Enum.ElasticBehavior.Never -- Sem efeito elástico
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-scrollFrame.Visible = false
-scrollFrame.Parent = LMG2L["Main_a"]
+-- Command Bar (TextBox)
+local CommandBar = Instance.new("TextBox")
+CommandBar.Name = "CommandBar"
+CommandBar.Size = UDim2.new(1, -20, 1, 0)
+CommandBar.Position = UDim2.new(0, 10, 0, 0)
+CommandBar.BackgroundTransparency = 1
+CommandBar.Font = Enum.Font.Gotham
+CommandBar.TextSize = 13
+CommandBar.TextColor3 = Theme.TextPrimary
+CommandBar.PlaceholderColor3 = Theme.TextSecondary
+CommandBar.PlaceholderText = "Type a command here..."
+CommandBar.TextXAlignment = Enum.TextXAlignment.Left
+CommandBar.ClearTextOnFocus = false
+CommandBar.Text = ""
+CommandBar.Parent = SearchContainer
+
+-- Destaque no Search quando focado
+CommandBar.Focused:Connect(function()
+    TweenService:Create(SearchStroke, TweenInfo.new(0.3), {Color = Theme.Accent}):Play()
+end)
+CommandBar.FocusLost:Connect(function()
+    TweenService:Create(SearchStroke, TweenInfo.new(0.3), {Color = Theme.Stroke}):Play()
+end)
+
+-- ScrollingFrame Inteligente (Substitui a lógica de Container/Scroll)
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "ScrollFrame"
+ScrollFrame.Size = UDim2.new(1, -16, 1, -56)
+ScrollFrame.Position = UDim2.new(0, 8, 0, 52)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 2
+ScrollFrame.ScrollBarImageColor3 = Theme.Stroke
+ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.Parent = Main
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 6)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = ScrollFrame
 
 -- Template para comandos
 local function createCommandTemplate(name)
     local cmdFrame = Instance.new("Frame")
     cmdFrame.Name = name
-    cmdFrame.BorderSizePixel = 0
-    cmdFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    cmdFrame.Size = UDim2.new(0, 282, 0, 50)
-    cmdFrame.BackgroundTransparency = 1
+    cmdFrame.Size = UDim2.new(1, 0, 0, 54)
+    cmdFrame.BackgroundColor3 = Theme.SecondaryBg
+    cmdFrame.BackgroundTransparency = 0.5
     cmdFrame.Visible = true
     
+    local cmdCorner = Instance.new("UICorner")
+    cmdCorner.CornerRadius = UDim.new(0, 6)
+    cmdCorner.Parent = cmdFrame
+
     local title = Instance.new("TextLabel")
     title.Name = "Title"
-    title.TextWrapped = true
-    title.BorderSizePixel = 0
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.TextScaled = true
-    title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    title.FontFace = Font.new([[rbxasset://fonts/families/GothamSSm.json]], Enum.FontWeight.Medium, Enum.FontStyle.Normal)
-    title.TextColor3 = Color3.fromRGB(255, 254, 254)
+    title.Size = UDim2.new(1, -20, 0, 24)
+    title.Position = UDim2.new(0, 10, 0, 6)
     title.BackgroundTransparency = 1
-    title.Size = UDim2.new(0, 282, 0, 26)
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Font = Enum.Font.GothamMedium
+    title.TextSize = 14
+    title.TextColor3 = Theme.TextPrimary
     title.Text = ""
     title.Parent = cmdFrame
     
     local description = Instance.new("TextLabel")
     description.Name = "Description"
-    description.TextWrapped = true
-    description.BorderSizePixel = 0
-    description.TextXAlignment = Enum.TextXAlignment.Left
-    description.TextTransparency = 0.4
-    description.TextScaled = true
-    description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    description.FontFace = Font.new([[rbxasset://fonts/families/GothamSSm.json]], Enum.FontWeight.Medium, Enum.FontStyle.Normal)
-    description.TextColor3 = Color3.fromRGB(255, 254, 254)
+    description.Size = UDim2.new(1, -20, 0, 18)
+    description.Position = UDim2.new(0, 10, 0, 30)
     description.BackgroundTransparency = 1
-    description.Size = UDim2.new(0, 262, 0, 22)
+    description.TextXAlignment = Enum.TextXAlignment.Left
+    description.Font = Enum.Font.Gotham
+    description.TextSize = 12
+    description.TextColor3 = Theme.TextSecondary
     description.Text = ""
-    description.Position = UDim2.new(0, 0, 0, 26)
     description.Parent = cmdFrame
     
     return cmdFrame
 end
 
--- Variável para controle
-local commandCount = 0
-local isUsingScroll = false
-
--- Função para verificar e alternar entre Frame e ScrollingFrame
-local function checkScrollNeeded()
-    local totalCommands = #cmdContainer:GetChildren()
-    
-    if totalCommands > 6 and not isUsingScroll then
-        -- Mudar para ScrollingFrame
-        isUsingScroll = true
-        
-        -- Mover todos os comandos para o ScrollingFrame
-        for _, cmd in ipairs(cmdContainer:GetChildren()) do
-            if cmd:IsA("Frame") then
-                cmd.Parent = scrollFrame
-            end
-        end
-        
-        -- Atualizar CanvasSize
-        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalCommands * 54)
-        
-        -- Esconder container normal, mostrar scroll
-        cmdContainer.Visible = false
-        scrollFrame.Visible = true
-        
-    elseif totalCommands <= 6 and isUsingScroll then
-        -- Voltar para Frame normal
-        isUsingScroll = false
-        
-        -- Mover comandos de volta
-        for _, cmd in ipairs(scrollFrame:GetChildren()) do
-            if cmd:IsA("Frame") then
-                cmd.Parent = cmdContainer
-            end
-        end
-        
-        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-        
-        -- Mostrar container normal, esconder scroll
-        cmdContainer.Visible = true
-        scrollFrame.Visible = false
-    end
-end
-
--- Função para atualizar visibilidade dos comandos (pesquisa por Title E Description)
+-- Filtro de Pesquisa Simplificado (Apenas esconde/mostra, o UIListLayout arruma a posição)
 local function filterCommands(searchText)
-    local visibleCount = 0
-    local currentContainer = isUsingScroll and scrollFrame or cmdContainer
+    local searchLower = string.lower(searchText)
     
-    for _, cmdFrame in ipairs(currentContainer:GetChildren()) do
+    for _, cmdFrame in ipairs(ScrollFrame:GetChildren()) do
         if cmdFrame:IsA("Frame") then
             local title = cmdFrame:FindFirstChild("Title")
             local description = cmdFrame:FindFirstChild("Description")
             
             if title and description then
-                local searchLower = string.lower(searchText)
-                local titleLower = string.lower(title.Text)
-                local descLower = string.lower(description.Text)
-                
-                -- Pesquisa tanto no Title quanto na Description
-                local foundInTitle = string.find(titleLower, searchLower, 1, true)
-                local foundInDesc = string.find(descLower, searchLower, 1, true)
-                
                 if searchText == "" then
-                    -- Se não tem texto, mostra todos
                     cmdFrame.Visible = true
-                    cmdFrame.Position = UDim2.new(0, 2, 0, visibleCount * 54)
-                    visibleCount = visibleCount + 1
-                elseif foundInTitle or foundInDesc then
-                    -- Se encontrou no Title OU Description
-                    cmdFrame.Visible = true
-                    cmdFrame.Position = UDim2.new(0, 2, 0, visibleCount * 54)
-                    visibleCount = visibleCount + 1
                 else
-                    cmdFrame.Visible = false
+                    local titleMatch = string.find(string.lower(title.Text), searchLower, 1, true)
+                    local descMatch = string.find(string.lower(description.Text), searchLower, 1, true)
+                    
+                    cmdFrame.Visible = (titleMatch ~= nil or descMatch ~= nil)
                 end
             end
         end
     end
-    
-    -- Atualizar CanvasSize se estiver usando scroll
-    if isUsingScroll then
-        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, visibleCount * 54)
-    end
 end
 
--- Configurar eventos da CommandBar
-LMG2L["CommandBar_d"]:GetPropertyChangedSignal("Text"):Connect(function()
-    filterCommands(LMG2L["CommandBar_d"].Text)
+CommandBar:GetPropertyChangedSignal("Text"):Connect(function()
+    filterCommands(CommandBar.Text)
 end)
 
-LMG2L["CommandBar_d"].FocusLost:Connect(function(enterPressed)
+CommandBar.FocusLost:Connect(function(enterPressed)
     if enterPressed then
-        local commandText = LMG2L["CommandBar_d"].Text
+        local commandText = CommandBar.Text
         if commandText ~= "" then
-            -- Executar comando
             local cmdData = Commands[string.lower(commandText)]
             if cmdData and cmdData.callback then
                 local success, result = pcall(cmdData.callback)
@@ -281,24 +237,17 @@ LMG2L["CommandBar_d"].FocusLost:Connect(function(enterPressed)
                     warn("Erro ao executar comando '" .. commandText .. "': " .. tostring(result))
                 end
             end
-            LMG2L["CommandBar_d"].Text = ""
+            CommandBar.Text = ""
         end
     end
 end)
 
--- Função para registrar comandos
+-- Registrar Comandos
 function Library:RegisterCommand(name, description, callback)
     local cmdFrame = createCommandTemplate(name)
-    cmdFrame:FindFirstChild("Title").Text = name
-    cmdFrame:FindFirstChild("Description").Text = description
-    cmdFrame.Visible = true
-    
-    -- Adicionar ao container atual
-    if isUsingScroll then
-        cmdFrame.Parent = scrollFrame
-    else
-        cmdFrame.Parent = cmdContainer
-    end
+    cmdFrame.Title.Text = name
+    cmdFrame.Description.Text = description
+    cmdFrame.Parent = ScrollFrame
     
     Commands[string.lower(name)] = {
         name = name,
@@ -306,16 +255,11 @@ function Library:RegisterCommand(name, description, callback)
         callback = callback
     }
     
-    -- Verificar se precisa ativar scroll
-    checkScrollNeeded()
-    
-    -- Reordenar comandos
-    filterCommands(LMG2L["CommandBar_d"].Text)
-    
+    filterCommands(CommandBar.Text)
     return cmdFrame
 end
 
--- Função para carregar comandos via loadstring
+-- Carregar Scripts
 function Library:LoadCommands(code)
     local success, err = pcall(function()
         local func = loadstring(code)
@@ -329,53 +273,40 @@ function Library:LoadCommands(code)
     end
 end
 
--- Inicialização
+-- Inicialização com Animações Suaves
 local function init()
     local player = Players.LocalPlayer
     
-    -- Configurar thumbnail
-    local success, image = pcall(function()
-        return Players:GetUserThumbnailAsync(
-            player.UserId,
-            Enum.ThumbnailType.HeadShot,
-            Enum.ThumbnailSize.Size420x420
-        )
+    -- Configurar Thumbnail
+    task.spawn(function()
+        local success, image = pcall(function()
+            return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+        end)
+        if success and image then
+            Thumbnail.Image = image
+        end
     end)
     
-    if success and image then
-        LMG2L["Thumbnail_5"].Image = image
-    end
+    -- Configurar Nome
+    NameLabel.Text = "Welcome, " .. player.DisplayName
     
-    -- Configurar nome
-    LMG2L["Name_8"].Text = "Welcome " .. player.DisplayName
+    -- Animação de Entrada
+    local originalTopPos = Top.Position
+    local originalMainPos = Main.Position
     
-    -- Animação de entrada do Top (vindo de cima)
-    local topOriginalPos = LMG2L["Top_2"].Position
-    LMG2L["Top_2"].Position = UDim2.new(topOriginalPos.X.Scale, topOriginalPos.X.Offset, topOriginalPos.Y.Scale, topOriginalPos.Y.Offset - 100)
+    Top.Position = UDim2.new(0, 0, -1, 0)
+    Main.Position = UDim2.new(0, 0, 1, 50)
+    Top.GroupTransparency = 1
+    Main.GroupTransparency = 1
     
-    local tweenTop = TweenService:Create(
-        LMG2L["Top_2"],
-        TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        {Position = topOriginalPos}
-    )
-    tweenTop:Play()
-    
-    -- Animação de entrada do Main (vindo de baixo)
-    local mainOriginalPos = LMG2L["Main_a"].Position
-    LMG2L["Main_a"].Position = UDim2.new(mainOriginalPos.X.Scale, mainOriginalPos.X.Offset, mainOriginalPos.Y.Scale, mainOriginalPos.Y.Offset + 100)
-    
-    local tweenMain = TweenService:Create(
-        LMG2L["Main_a"],
-        TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        {Position = mainOriginalPos}
-    )
-    tweenMain:Play()
+    local tweenInfo = TweenService:Create(Top, TweenInfo.new(0.6, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), {Position = originalTopPos, BackgroundTransparency = 0})
+    TweenService:Create(Main, TweenInfo.new(0.6, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), {Position = originalMainPos, BackgroundTransparency = 0}):Play()
+    tweenInfo:Play()
 end
 
 init()
 
--- Retornar a Library
-Library.ScreenGui = LMG2L["XrayGui_1"]
-Library.CommandBar = LMG2L["CommandBar_d"]
+Library.ScreenGui = XrayGui
+Library.CommandBar = CommandBar
 
-return Library, require
+return Library
