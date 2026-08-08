@@ -1,13 +1,13 @@
---[[
+--[=[
  d888b  db    db d888888b      .d888b.      db      db    db  .d8b.  
 88' Y8b 88    88   `88'        VP  `8D      88      88    88 d8' `8b 
 88      88    88    88            odD'      88      88    88 88ooo88 
 88  ooo 88    88    88          .88'        88      88    88 88~~~88 
-88. ~8~ 88b  d88   .88.        j88.         88booo. 88b  d88 88   88    @uniquadev
+88. ~8~ 88b  d88   .88.        j88.         88booo. 88b  d88 88   88    @uniquadev (Redesign by Manus)
  Y888P  ~Y8888P' Y888888P      888888D      Y88888P ~Y8888P' YP   YP  CONVERTER 
- 
- -- UI REFATORADA E MODERNIZADA --
-]]
+
+Redesigned for better spacing, modern dark theme aesthetics, smooth transitions, and clean typography.
+]=]
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -16,250 +16,291 @@ local UserInputService = game:GetService("UserInputService")
 local Library = {}
 local Commands = {}
 
--- Tema Moderno (Dark Theme)
-local Theme = {
-    MainBg = Color3.fromRGB(24, 24, 27),       -- Cinza muito escuro
-    SecondaryBg = Color3.fromRGB(39, 39, 42),  -- Cinza claro (Command Bar / Top)
-    Stroke = Color3.fromRGB(63, 63, 70),       -- Borda padrão
-    Accent = Color3.fromRGB(139, 92, 246),     -- Cor de destaque (Roxo suave)
-    TextPrimary = Color3.fromRGB(250, 250, 250),
-    TextSecondary = Color3.fromRGB(161, 161, 170)
-}
+local LMG2L = {};
 
--- ScreenGui
-local XrayGui = Instance.new("ScreenGui")
-XrayGui.Name = "XrayGui"
-XrayGui.ResetOnSpawn = false
-XrayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-XrayGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+-- ScreenGui Principal com IgnoreGuiInset ou ZIndex adequado
+LMG2L["XrayGui_1"] = Instance.new("ScreenGui", Players.LocalPlayer:WaitForChild("PlayerGui"));
+LMG2L["XrayGui_1"]["Name"] = [[XrayGui_Modern]];
+LMG2L["XrayGui_1"]["ZIndexBehavior"] = Enum.ZIndexBehavior.Sibling;
+LMG2L["XrayGui_1"]["ResetOnSpawn"] = false;
 
--- Container Principal (Facilita mover e centralizar a UI)
-local Container = Instance.new("Frame")
-Container.Name = "Container"
-Container.Size = UDim2.new(0, 320, 0, 420)
-Container.Position = UDim2.new(0.5, -160, 0.5, -210) -- Centralizado na tela
-Container.BackgroundTransparency = 1
-Container.Parent = XrayGui
+-- Top Bar (Perfil / Saudação) - Mais espaçosa e elegante
+LMG2L["Top_2"] = Instance.new("Frame", LMG2L["XrayGui_1"]);
+LMG2L["Top_2"]["BorderSizePixel"] = 0;
+LMG2L["Top_2"]["BackgroundColor3"] = Color3.fromRGB(15, 15, 15); -- Preto carvão sofisticado
+LMG2L["Top_2"]["Size"] = UDim2.new(0, 320, 0, 56); -- Ligeiramente mais largo e alto para respiro
+LMG2L["Top_2"]["Position"] = UDim2.new(0, 488, 0, 40);
+LMG2L["Top_2"]["Name"] = [[Top]];
+LMG2L["Top_2"]["AnchorPoint"] = Vector2.new(0, 0);
 
--- Top (Header)
-local Top = Instance.new("Frame")
-Top.Name = "Top"
-Top.Size = UDim2.new(1, 0, 0, 54)
-Top.BackgroundColor3 = Theme.SecondaryBg
-Top.BorderSizePixel = 0
-Top.Parent = Container
+-- Arredondamento suave
+local topCorner = Instance.new("UICorner", LMG2L["Top_2"])
+topCorner.CornerRadius = UDim.new(0, 10)
 
-local TopCorner = Instance.new("UICorner")
-TopCorner.CornerRadius = UDim.new(0, 8)
-TopCorner.Parent = Top
+-- UIStroke com gradiente sutil / cinza refinado
+local topStroke = Instance.new("UIStroke", LMG2L["Top_2"])
+topStroke.Color = Color3.fromRGB(45, 45, 45)
+topStroke.Thickness = 1.5
 
-local TopStroke = Instance.new("UIStroke")
-TopStroke.Color = Theme.Stroke
-TopStroke.Parent = Top
+-- Thumbnail (Avatar) maior e centralizado verticalmente
+LMG2L["Thumbnail_5"] = Instance.new("ImageLabel", LMG2L["Top_2"]);
+LMG2L["Thumbnail_5"]["BorderSizePixel"] = 0;
+LMG2L["Thumbnail_5"]["BackgroundColor3"] = Color3.fromRGB(30, 30, 30);
+LMG2L["Thumbnail_5"]["Image"] = [[rbxasset://textures/ui/GuiImagePlaceholder.png]];
+LMG2L["Thumbnail_5"]["Size"] = UDim2.new(0, 40, 0, 40);
+LMG2L["Thumbnail_5"]["Name"] = [[Thumbnail]];
+LMG2L["Thumbnail_5"]["Position"] = UDim2.new(0, 10, 0, 8);
 
--- Avatar (Thumbnail)
-local Thumbnail = Instance.new("ImageLabel")
-Thumbnail.Name = "Thumbnail"
-Thumbnail.Size = UDim2.new(0, 38, 0, 38)
-Thumbnail.Position = UDim2.new(0, 8, 0, 8)
-Thumbnail.BackgroundColor3 = Theme.MainBg
-Thumbnail.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
-Thumbnail.Parent = Top
+local thumbCorner = Instance.new("UICorner", LMG2L["Thumbnail_5"])
+thumbCorner.CornerRadius = UDim.new(1, 0)
 
-local ThumbnailCorner = Instance.new("UICorner")
-ThumbnailCorner.CornerRadius = UDim.new(1, 0) -- 100% Redondo
-ThumbnailCorner.Parent = Thumbnail
+local thumbStroke = Instance.new("UIStroke", LMG2L["Thumbnail_5"])
+thumbStroke.Color = Color3.fromRGB(60, 60, 60)
+thumbStroke.Thickness = 1
 
--- Nome de Boas-vindas
-local NameLabel = Instance.new("TextLabel")
-NameLabel.Name = "Name"
-NameLabel.Size = UDim2.new(1, -60, 1, 0)
-NameLabel.Position = UDim2.new(0, 54, 0, 0)
-NameLabel.BackgroundTransparency = 1
-NameLabel.TextXAlignment = Enum.TextXAlignment.Left
-NameLabel.Font = Enum.Font.GothamMedium
-NameLabel.TextSize = 15 -- Removido o TextScaled para ficar mais limpo
-NameLabel.TextColor3 = Theme.TextPrimary
-NameLabel.Text = "Welcome, Player"
-NameLabel.Parent = Top
+-- Nome / Saudação com melhor tipografia
+LMG2L["Name_8"] = Instance.new("TextLabel", LMG2L["Top_2"]);
+LMG2L["Name_8"]["TextWrapped"] = true;
+LMG2L["Name_8"]["BorderSizePixel"] = 0;
+LMG2L["Name_8"]["TextXAlignment"] = Enum.TextXAlignment.Left;
+LMG2L["Name_8"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
+LMG2L["Name_8"]["FontFace"] = Font.new([[rbxasset://fonts/families/GothamSSm.json]], Enum.FontWeight.SemiBold, Enum.FontStyle.Normal);
+LMG2L["Name_8"]["TextColor3"] = Color3.fromRGB(240, 240, 240);
+LMG2L["Name_8"]["BackgroundTransparency"] = 1;
+LMG2L["Name_8"]["Size"] = UDim2.new(0, 245, 0, 22);
+LMG2L["Name_8"]["Text"] = [[Welcome, Daniel]];
+LMG2L["Name_8"]["TextSize"] = 15;
+LMG2L["Name_8"]["Name"] = [[Name]];
+LMG2L["Name_8"]["Position"] = UDim2.new(0, 60, 0, 17);
 
--- Main (Corpo da UI)
-local Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.new(1, 0, 1, -62)
-Main.Position = UDim2.new(0, 0, 0, 62)
-Main.BackgroundColor3 = Theme.MainBg
-Main.BorderSizePixel = 0
-Main.Parent = Container
+-- Main Container (Janela Principal) - Mais espaçosa
+LMG2L["Main_a"] = Instance.new("Frame", LMG2L["XrayGui_1"]);
+LMG2L["Main_a"]["BorderSizePixel"] = 0;
+LMG2L["Main_a"]["BackgroundColor3"] = Color3.fromRGB(15, 15, 15);
+LMG2L["Main_a"]["Size"] = UDim2.new(0, 320, 0, 380); -- Mais altura para evitar aperto
+LMG2L["Main_a"]["Position"] = UDim2.new(0, 488, 0, 104);
+LMG2L["Main_a"]["Name"] = [[Main]];
+LMG2L["Main_a"]["AnchorPoint"] = Vector2.new(0, 0);
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 8)
-MainCorner.Parent = Main
+local mainCorner = Instance.new("UICorner", LMG2L["Main_a"])
+mainCorner.CornerRadius = UDim.new(0, 10)
 
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Theme.Stroke
-MainStroke.Parent = Main
+local mainStroke = Instance.new("UIStroke", LMG2L["Main_a"])
+mainStroke.Color = Color3.fromRGB(45, 45, 45)
+mainStroke.Thickness = 1.5
 
--- Command Bar Container
-local SearchContainer = Instance.new("Frame")
-SearchContainer.Name = "SearchContainer"
-SearchContainer.Size = UDim2.new(1, -16, 0, 34)
-SearchContainer.Position = UDim2.new(0, 8, 0, 10)
-SearchContainer.BackgroundColor3 = Theme.SecondaryBg
-SearchContainer.Parent = Main
+-- CommandBar (Barra de Pesquisa / Comando) redesenhada com ícone/padding melhor
+LMG2L["CommandBar_d"] = Instance.new("TextBox", LMG2L["Main_a"]);
+LMG2L["CommandBar_d"]["Name"] = [[CommandBar]];
+LMG2L["CommandBar_d"]["PlaceholderColor3"] = Color3.fromRGB(120, 120, 120);
+LMG2L["CommandBar_d"]["BorderSizePixel"] = 0;
+LMG2L["CommandBar_d"]["TextColor3"] = Color3.fromRGB(240, 240, 240);
+LMG2L["CommandBar_d"]["BackgroundColor3"] = Color3.fromRGB(25, 25, 25);
+LMG2L["CommandBar_d"]["PlaceholderText"] = [[Type a command or search...]];
+LMG2L["CommandBar_d"]["Size"] = UDim2.new(1, -24, 0, 36);
+LMG2L["CommandBar_d"]["Position"] = UDim2.new(0, 12, 0, 14);
+LMG2L["CommandBar_d"]["Text"] = [[]];
+LMG2L["CommandBar_d"]["TextSize"] = 14;
+LMG2L["CommandBar_d"]["ClearTextOnFocus"] = false;
 
-local SearchCorner = Instance.new("UICorner")
-SearchCorner.CornerRadius = UDim.new(0, 6)
-SearchCorner.Parent = SearchContainer
+local cbStroke = Instance.new("UIStroke", LMG2L["CommandBar_d"])
+cbStroke.Color = Color3.fromRGB(50, 50, 50)
+cbStroke.Thickness = 1
 
-local SearchStroke = Instance.new("UIStroke")
-SearchStroke.Color = Theme.Stroke
-SearchStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-SearchStroke.Parent = SearchContainer
+local cbCorner = Instance.new("UICorner", LMG2L["CommandBar_d"])
+cbCorner.CornerRadius = UDim.new(0, 8)
 
--- Command Bar (TextBox)
-local CommandBar = Instance.new("TextBox")
-CommandBar.Name = "CommandBar"
-CommandBar.Size = UDim2.new(1, -20, 1, 0)
-CommandBar.Position = UDim2.new(0, 10, 0, 0)
-CommandBar.BackgroundTransparency = 1
-CommandBar.Font = Enum.Font.Gotham
-CommandBar.TextSize = 13
-CommandBar.TextColor3 = Theme.TextPrimary
-CommandBar.PlaceholderColor3 = Theme.TextSecondary
-CommandBar.PlaceholderText = "Type a command here..."
-CommandBar.TextXAlignment = Enum.TextXAlignment.Left
-CommandBar.ClearTextOnFocus = false
-CommandBar.Text = ""
-CommandBar.Parent = SearchContainer
+-- Padding interno para o TextBox não colar nas bordas
+local cbPadding = Instance.new("UIPadding", LMG2L["CommandBar_d"])
+cbPadding.PaddingLeft = UDim.new(0, 12)
+cbPadding.PaddingRight = UDim.new(0, 12)
 
--- Destaque no Search quando focado
-CommandBar.Focused:Connect(function()
-    TweenService:Create(SearchStroke, TweenInfo.new(0.3), {Color = Theme.Accent}):Play()
-end)
-CommandBar.FocusLost:Connect(function()
-    TweenService:Create(SearchStroke, TweenInfo.new(0.3), {Color = Theme.Stroke}):Play()
-end)
+-- Container de comandos normal
+local cmdContainer = Instance.new("Frame")
+cmdContainer.Name = "CommandsContainer"
+cmdContainer.BorderSizePixel = 0
+cmdContainer.BackgroundTransparency = 1
+cmdContainer.Size = UDim2.new(1, -24, 1, -66)
+cmdContainer.Position = UDim2.new(0, 12, 0, 58)
+cmdContainer.Parent = LMG2L["Main_a"]
 
--- ScrollingFrame Inteligente (Substitui a lógica de Container/Scroll)
-local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Name = "ScrollFrame"
-ScrollFrame.Size = UDim2.new(1, -16, 1, -56)
-ScrollFrame.Position = UDim2.new(0, 8, 0, 52)
-ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.BorderSizePixel = 0
-ScrollFrame.ScrollBarThickness = 2
-ScrollFrame.ScrollBarImageColor3 = Theme.Stroke
-ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-ScrollFrame.Parent = Main
+-- ScrollingFrame elegante com barra customizada sutil
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Name = "ScrollFrame"
+scrollFrame.BorderSizePixel = 0
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.Size = UDim2.new(1, -24, 1, -66)
+scrollFrame.Position = UDim2.new(0, 12, 0, 58)
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(70, 70, 70)
+scrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.Visible = false
+scrollFrame.Parent = LMG2L["Main_a"]
 
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.Padding = UDim.new(0, 6)
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Parent = ScrollFrame
-
--- Template para comandos
+-- Template para comandos (mais espaçoso, com hover effect simulado ou visual limpo)
 local function createCommandTemplate(name)
     local cmdFrame = Instance.new("Frame")
     cmdFrame.Name = name
-    cmdFrame.Size = UDim2.new(1, 0, 0, 54)
-    cmdFrame.BackgroundColor3 = Theme.SecondaryBg
-    cmdFrame.BackgroundTransparency = 0.5
+    cmdFrame.BorderSizePixel = 0
+    cmdFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    cmdFrame.Size = UDim2.new(1, 0, 0, 52) -- Espaço vertical generoso por item
+    cmdFrame.BackgroundTransparency = 0
     cmdFrame.Visible = true
-    
-    local cmdCorner = Instance.new("UICorner")
-    cmdCorner.CornerRadius = UDim.new(0, 6)
-    cmdCorner.Parent = cmdFrame
+
+    local frameCorner = Instance.new("UICorner", cmdFrame)
+    frameCorner.CornerRadius = UDim.new(0, 8)
+
+    local frameStroke = Instance.new("UIStroke", cmdFrame)
+    frameStroke.Color = Color3.fromRGB(35, 35, 35)
+    frameStroke.Thickness = 1
 
     local title = Instance.new("TextLabel")
     title.Name = "Title"
-    title.Size = UDim2.new(1, -20, 0, 24)
-    title.Position = UDim2.new(0, 10, 0, 6)
-    title.BackgroundTransparency = 1
+    title.TextWrapped = true
+    title.BorderSizePixel = 0
     title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Font = Enum.Font.GothamMedium
-    title.TextSize = 14
-    title.TextColor3 = Theme.TextPrimary
+    title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    title.FontFace = Font.new([[rbxasset://fonts/families/GothamSSm.json]], Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+    title.TextColor3 = Color3.fromRGB(240, 240, 240)
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, -24, 0, 20)
+    title.Position = UDim2.new(0, 12, 0, 7)
     title.Text = ""
+    title.TextSize = 13
     title.Parent = cmdFrame
-    
+
     local description = Instance.new("TextLabel")
     description.Name = "Description"
-    description.Size = UDim2.new(1, -20, 0, 18)
-    description.Position = UDim2.new(0, 10, 0, 30)
-    description.BackgroundTransparency = 1
+    description.TextWrapped = true
+    description.BorderSizePixel = 0
     description.TextXAlignment = Enum.TextXAlignment.Left
-    description.Font = Enum.Font.Gotham
-    description.TextSize = 12
-    description.TextColor3 = Theme.TextSecondary
+    description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    description.FontFace = Font.new([[rbxasset://fonts/families/GothamSSm.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+    description.TextColor3 = Color3.fromRGB(150, 150, 150)
+    description.BackgroundTransparency = 1
+    description.Size = UDim2.new(1, -24, 0, 16)
+    description.Position = UDim2.new(0, 12, 0, 27)
     description.Text = ""
+    description.TextSize = 11
     description.Parent = cmdFrame
-    
+
     return cmdFrame
 end
 
--- Filtro de Pesquisa Simplificado (Apenas esconde/mostra, o UIListLayout arruma a posição)
+local isUsingScroll = false
+
+-- Função para alternar entre Frame normal e ScrollingFrame baseada na quantidade (limite de 5 visíveis confortáveis)
+local function checkScrollNeeded()
+    local totalCommands = 0
+    for _, child in ipairs(cmdContainer:GetChildren()) do
+        if child:IsA("Frame") then totalCommands = totalCommands + 1 end
+    end
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if child:IsA("Frame") then totalCommands = totalCommands + 1 end
+    end
+
+    if totalCommands > 5 and not isUsingScroll then
+        isUsingScroll = true
+        for _, cmd in ipairs(cmdContainer:GetChildren()) do
+            if cmd:IsA("Frame") then
+                cmd.Parent = scrollFrame
+            end
+        end
+        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalCommands * 60)
+        cmdContainer.Visible = false
+        scrollFrame.Visible = true
+    elseif totalCommands <= 5 and isUsingScroll then
+        isUsingScroll = false
+        for _, cmd in ipairs(scrollFrame:GetChildren()) do
+            if cmd:IsA("Frame") then
+                cmd.Parent = cmdContainer
+            end
+        end
+        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+        cmdContainer.Visible = true
+        scrollFrame.Visible = false
+    end
+end
+
+-- Filtragem de comandos com espaçamento vertical de 60px por item (52px altura + 8px gap)
 local function filterCommands(searchText)
-    local searchLower = string.lower(searchText)
-    
-    for _, cmdFrame in ipairs(ScrollFrame:GetChildren()) do
+    local visibleCount = 0
+    local currentContainer = isUsingScroll and scrollFrame or cmdContainer
+
+    for _, cmdFrame in ipairs(currentContainer:GetChildren()) do
         if cmdFrame:IsA("Frame") then
             local title = cmdFrame:FindFirstChild("Title")
             local description = cmdFrame:FindFirstChild("Description")
-            
+
             if title and description then
-                if searchText == "" then
+                local searchLower = string.lower(searchText)
+                local titleLower = string.lower(title.Text)
+                local descLower = string.lower(description.Text)
+
+                local foundInTitle = string.find(titleLower, searchLower, 1, true)
+                local foundInDesc = string.find(descLower, searchLower, 1, true)
+
+                if searchText == "" or foundInTitle or foundInDesc then
                     cmdFrame.Visible = true
+                    cmdFrame.Position = UDim2.new(0, 0, 0, visibleCount * 60)
+                    visibleCount = visibleCount + 1
                 else
-                    local titleMatch = string.find(string.lower(title.Text), searchLower, 1, true)
-                    local descMatch = string.find(string.lower(description.Text), searchLower, 1, true)
-                    
-                    cmdFrame.Visible = (titleMatch ~= nil or descMatch ~= nil)
+                    cmdFrame.Visible = false
                 end
             end
         end
     end
+
+    if isUsingScroll then
+        scrollFrame.CanvasSize = UDim2.new(0, 0, 0, visibleCount * 60)
+    end
 end
 
-CommandBar:GetPropertyChangedSignal("Text"):Connect(function()
-    filterCommands(CommandBar.Text)
+LMG2L["CommandBar_d"]:GetPropertyChangedSignal("Text"):Connect(function()
+    filterCommands(LMG2L["CommandBar_d"].Text)
 end)
 
-CommandBar.FocusLost:Connect(function(enterPressed)
+LMG2L["CommandBar_d"].FocusLost:Connect(function(enterPressed)
     if enterPressed then
-        local commandText = CommandBar.Text
+        local commandText = LMG2L["CommandBar_d"].Text
         if commandText ~= "" then
             local cmdData = Commands[string.lower(commandText)]
             if cmdData and cmdData.callback then
                 local success, result = pcall(cmdData.callback)
                 if not success then
-                    warn("Erro ao executar comando '" .. commandText .. "': " .. tostring(result))
+                    warn("Erro ao executar comando '" .. commandText + "': " .. tostring(result))
                 end
             end
-            CommandBar.Text = ""
+            LMG2L["CommandBar_d"].Text = ""
         end
     end
 end)
 
--- Registrar Comandos
 function Library:RegisterCommand(name, description, callback)
     local cmdFrame = createCommandTemplate(name)
-    cmdFrame.Title.Text = name
-    cmdFrame.Description.Text = description
-    cmdFrame.Parent = ScrollFrame
-    
+    cmdFrame:FindFirstChild("Title").Text = name
+    cmdFrame:FindFirstChild("Description").Text = description
+    cmdFrame.Visible = true
+
+    if isUsingScroll then
+        cmdFrame.Parent = scrollFrame
+    else
+        cmdFrame.Parent = cmdContainer
+    end
+
     Commands[string.lower(name)] = {
         name = name,
         description = description,
         callback = callback
     }
-    
-    filterCommands(CommandBar.Text)
+
+    checkScrollNeeded()
+    filterCommands(LMG2L["CommandBar_d"].Text)
+
     return cmdFrame
 end
 
--- Carregar Scripts
 function Library:LoadCommands(code)
     local success, err = pcall(function()
         local func = loadstring(code)
@@ -267,46 +308,56 @@ function Library:LoadCommands(code)
             func(self)
         end
     end)
-    
+
     if not success then
         warn("Erro ao carregar comandos: " .. tostring(err))
     end
 end
 
--- Inicialização com Animações Suaves
 local function init()
     local player = Players.LocalPlayer
-    
-    -- Configurar Thumbnail
-    task.spawn(function()
-        local success, image = pcall(function()
-            return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
-        end)
-        if success and image then
-            Thumbnail.Image = image
-        end
+
+    local success, image = pcall(function()
+        return Players:GetUserThumbnailAsync(
+            player.UserId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size420x420
+        )
     end)
-    
-    -- Configurar Nome
-    NameLabel.Text = "Welcome, " .. player.DisplayName
-    
-    -- Animação de Entrada
-    local originalTopPos = Top.Position
-    local originalMainPos = Main.Position
-    
-    Top.Position = UDim2.new(0, 0, -1, 0)
-    Main.Position = UDim2.new(0, 0, 1, 50)
-    Top.GroupTransparency = 1
-    Main.GroupTransparency = 1
-    
-    local tweenInfo = TweenService:Create(Top, TweenInfo.new(0.6, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), {Position = originalTopPos, BackgroundTransparency = 0})
-    TweenService:Create(Main, TweenInfo.new(0.6, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), {Position = originalMainPos, BackgroundTransparency = 0}):Play()
-    tweenInfo:Play()
+
+    if success and image then
+        LMG2L["Thumbnail_5"].Image = image
+    end
+
+    LMG2L["Name_8"].Text = "Welcome, " .. player.DisplayName
+
+    -- Animações de entrada suaves
+    local topOriginalPos = LMG2L["Top_2"].Position
+    LMG2L["Top_2"].Position = UDim2.new(topOriginalPos.X.Scale, topOriginalPos.X.Offset, topOriginalPos.Y.Scale, topOriginalPos.Y.Offset - 20)
+    LMG2L["Top_2"].BackgroundTransparency = 1
+
+    local tweenTop = TweenService:Create(
+        LMG2L["Top_2"],
+        TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+        {Position = topOriginalPos, BackgroundTransparency = 0}
+    )
+    tweenTop:Play()
+
+    local mainOriginalPos = LMG2L["Main_a"].Position
+    LMG2L["Main_a"].Position = UDim2.new(mainOriginalPos.X.Scale, mainOriginalPos.X.Offset, mainOriginalPos.Y.Scale, mainOriginalPos.Y.Offset + 20)
+    LMG2L["Main_a"].BackgroundTransparency = 1
+
+    local tweenMain = TweenService:Create(
+        LMG2L["Main_a"],
+        TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+        {Position = mainOriginalPos, BackgroundTransparency = 0}
+    )
+    tweenMain:Play()
 end
 
 init()
 
-Library.ScreenGui = XrayGui
-Library.CommandBar = CommandBar
+Library.ScreenGui = LMG2L["XrayGui_1"]
+Library.CommandBar = LMG2L["CommandBar_d"]
 
 return Library
