@@ -2007,200 +2007,220 @@ function Library:CreateWindow(options)
         end
         
         function Tab:AddColorPicker(cpOptions)
-            local Text = cpOptions.Text or "Color Picker"
-            local Default = cpOptions.Default or Color3.fromRGB(255, 0, 0)
-            local Side = cpOptions.Side or "Main1"
-            local Callback = cpOptions.Callback or function() end
-            local Flag = cpOptions.Flag or Text
-            local targetMain = self:GetMain(Side)
-            
-            local ColorPickerFrame = Instance.new("Frame")
-            ColorPickerFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
-            ColorPickerFrame.Size = UDim2.new(0, 194, 0, 34)
-            ColorPickerFrame.ClipsDescendants = true
-            ColorPickerFrame.Parent = targetMain
-            local CPCorner = Instance.new("UICorner"); CPCorner.Parent = ColorPickerFrame
-            
-            local Title = Instance.new("TextLabel")
-            Title.Parent = ColorPickerFrame
-            Title.BackgroundTransparency = 1
-            Title.Position = UDim2.new(0, 10, 0, 0)
-            Title.Size = UDim2.new(1, -60, 0, 34)
-            Title.Text = Text
-            Title.TextColor3 = Library.Theme.PrimaryText
-            SetTextRole(Title, "Primary")
-            Title.TextSize = 14
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
-            
-            local ColorDisplay = Instance.new("Frame")
-            ColorDisplay.Parent = ColorPickerFrame
-            ColorDisplay.BackgroundColor3 = Default
-            ColorDisplay.Position = UDim2.new(1, -35, 0, 7)
-            ColorDisplay.Size = UDim2.new(0, 20, 0, 20)
-            local CDCorner = Instance.new("UICorner"); CDCorner.CornerRadius = UDim.new(0, 4); CDCorner.Parent = ColorDisplay
-            
-            local PickerContainer = Instance.new("Frame")
-            PickerContainer.Parent = ColorPickerFrame
-            PickerContainer.BackgroundTransparency = 1
-            PickerContainer.Position = UDim2.new(0, 0, 0, 34)
-            PickerContainer.Size = UDim2.new(1, 0, 0, 150)
-            
-            local HueSatImg = Instance.new("ImageLabel")
-            HueSatImg.Name = "HueSat"
-            HueSatImg.Parent = PickerContainer
-            HueSatImg.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            HueSatImg.Position = UDim2.new(0, 10, 0, 5)
-            HueSatImg.Size = UDim2.new(0, 150, 0, 120)
-            HueSatImg.Image = "rbxassetid://73194550500215"
-            local SCorner = Instance.new("UICorner"); SCorner.Parent = HueSatImg
-            
-            local SCursor = Instance.new("Frame")
-            SCursor.Parent = HueSatImg
-            SCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            SCursor.Size = UDim2.new(0, 6, 0, 6)
-            SCursor.ZIndex = 2
-            local SCCorner = Instance.new("UICorner"); SCCorner.CornerRadius = UDim.new(1, 0); SCCorner.Parent = SCursor
-            
-            local ValueBar = Instance.new("Frame")
-            ValueBar.Name = "ValueBar"
-            ValueBar.Parent = PickerContainer
-            ValueBar.Position = UDim2.new(0, 170, 0, 5)
-            ValueBar.Size = UDim2.new(0, 15, 0, 120)
-            local VCorner = Instance.new("UICorner"); VCorner.Parent = ValueBar
-            
-            local VGradient = Instance.new("UIGradient")
-            VGradient.Rotation = 90
-            VGradient.Parent = ValueBar
-            
-            local VCursor = Instance.new("Frame")
-            VCursor.Parent = ValueBar
-            VCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            VCursor.BackgroundTransparency = 1
-            VCursor.Size = UDim2.new(1, 0, 0, 3)
-            VCursor.ZIndex = 2
-            
-            local VCursorCorner = Instance.new("UICorner")
-            VCursorCorner.CornerRadius = UDim.new(0, 4)
-            VCursorCorner.Parent = VCursor
-            
-            local VCursorStroke = Instance.new("UIStroke")
-            VCursorStroke.Parent = VCursor
-            VCursorStroke.Color = Color3.fromRGB(255, 255, 255)
-            VCursorStroke.Thickness = 1
-            
-            local H, S, V = Default:ToHSV()
-            local Opened = false
-            local LastColor = nil
-            local LastH = H
-            local LastS = S
-            local LastUpdate = 0
-            
-            local function UpdateColor()
-                local now = tick()
-                if now - LastUpdate < 1/60 then return end
-                LastUpdate = now
-                local color = Color3.fromHSV(H, S, V)
-                if color == LastColor then return end
-                LastColor = color
-                ColorDisplay.BackgroundColor3 = color
-                if H ~= LastH or S ~= LastS then
-                    LastH = H
-                    LastS = S
-                    VGradient.Color = ColorSequence.new(Color3.fromHSV(H, S, 1), Color3.new())
-                end
-                Library.Flags[Flag] = color
-                task.spawn(function() Callback(color) end)
-            end
-            
-            local function VisualUpdate(color, fromConfig)
-                if typeof(color) ~= "Color3" then return end
-                H, S, V = color:ToHSV()
-                ColorDisplay.BackgroundColor3 = color
-                VGradient.Color = ColorSequence.new(Color3.fromHSV(H, S, 1), Color3.new())
-                VCursor.Position = UDim2.new(0, 0, 1 - V, -1)
-                SCursor.Position = UDim2.new(H, -3, 1 - S, -3)
-                Library.Flags[Flag] = color
-                LastColor = color
-                
-                if fromConfig then
-                    task.spawn(function()
-                        pcall(Callback, color)
-                    end)
-                end
-            end
-            
-            local function Toggle()
-                if Library.IsDraggingWindow or Library.IsDraggingColorPicker then return end
-                Opened = not Opened
-                Library:Tween(ColorPickerFrame, {Size = Opened and UDim2.new(0, 194, 0, 184) or UDim2.new(0, 194, 0, 34)})
-            end
-            
-            local HeaderButton = Instance.new("TextButton")
-            HeaderButton.Name = "HeaderButton"
-            HeaderButton.Parent = ColorPickerFrame
-            HeaderButton.BackgroundTransparency = 1
-            HeaderButton.Size = UDim2.new(1, 0, 0, 34)
-            HeaderButton.Text = ""
-            HeaderButton.ZIndex = 5
-            HeaderButton.Activated:Connect(Toggle)
-            
-            local VDragging, HSDragging = false, false
-            
-            ValueBar.InputBegan:Connect(function(input)
-                if Library.IsDraggingWindow then return end
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    VDragging = true
-                    Library.IsDraggingColorPicker = true
-                    SetAllScrollingEnabledFast(false)
-                end
+    local Text = cpOptions.Text or "Color Picker"
+    local Default = cpOptions.Default or Color3.fromRGB(255, 0, 0)
+    local Side = cpOptions.Side or "Main1"
+    local Callback = cpOptions.Callback or function() end
+    local Flag = cpOptions.Flag or Text
+    local targetMain = self:GetMain(Side)
+    
+    local ColorPickerFrame = Instance.new("Frame")
+    ColorPickerFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
+    ColorPickerFrame.Size = UDim2.new(0, 194, 0, 34)
+    ColorPickerFrame.ClipsDescendants = true
+    ColorPickerFrame.Parent = targetMain
+    local CPCorner = Instance.new("UICorner"); CPCorner.Parent = ColorPickerFrame
+    
+    local Title = Instance.new("TextLabel")
+    Title.Parent = ColorPickerFrame
+    Title.BackgroundTransparency = 1
+    Title.Position = UDim2.new(0, 10, 0, 0)
+    Title.Size = UDim2.new(1, -60, 0, 34)
+    Title.Text = Text
+    Title.TextColor3 = Library.Theme.PrimaryText
+    SetTextRole(Title, "Primary")
+    Title.TextSize = 14
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
+    
+    local ColorDisplay = Instance.new("Frame")
+    ColorDisplay.Parent = ColorPickerFrame
+    ColorDisplay.BackgroundColor3 = Default
+    ColorDisplay.Position = UDim2.new(1, -35, 0, 7)
+    ColorDisplay.Size = UDim2.new(0, 20, 0, 20)
+    local CDCorner = Instance.new("UICorner"); CDCorner.CornerRadius = UDim.new(0, 4); CDCorner.Parent = ColorDisplay
+    
+    local PickerContainer = Instance.new("Frame")
+    PickerContainer.Parent = ColorPickerFrame
+    PickerContainer.BackgroundTransparency = 1
+    PickerContainer.Position = UDim2.new(0, 0, 0, 34)
+    PickerContainer.Size = UDim2.new(1, 0, 0, 150)
+    
+    -- SAT/BRILHO (Bloco do meio - ajusta saturação e brilho)
+    local SatBrilhoImg = Instance.new("ImageLabel")
+    SatBrilhoImg.Name = "SatBrilho"
+    SatBrilhoImg.Parent = PickerContainer
+    SatBrilhoImg.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    SatBrilhoImg.Position = UDim2.new(0, 10, 0, 5)
+    SatBrilhoImg.Size = UDim2.new(0, 150, 0, 120)
+    SatBrilhoImg.Image = "rbxassetid://4155801252" -- Asset do bloco S+B
+    local SBCorner = Instance.new("UICorner"); SBCorner.Parent = SatBrilhoImg
+    
+    local SBCursor = Instance.new("Frame")
+    SBCursor.Parent = SatBrilhoImg
+    SBCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    SBCursor.Size = UDim2.new(0, 6, 0, 6)
+    SBCursor.ZIndex = 2
+    local SBCCorner = Instance.new("UICorner"); SBCCorner.CornerRadius = UDim.new(1, 0); SBCCorner.Parent = SBCursor
+    
+    -- HUE (Barra lateral - gradiente de cores)
+    local HueBar = Instance.new("Frame")
+    HueBar.Name = "HueBar"
+    HueBar.Parent = PickerContainer
+    HueBar.Position = UDim2.new(0, 170, 0, 5)
+    HueBar.Size = UDim2.new(0, 15, 0, 120)
+    local HCorner = Instance.new("UICorner"); HCorner.Parent = HueBar
+    
+    -- NOVO: GradientSequence com as cores especificadas
+    local HueGradient = Instance.new("UIGradient")
+    HueGradient.Rotation = 90
+    HueGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),      -- 0: Vermelho
+        ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)), -- 0.17: Amarelo
+        ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),   -- 0.33: Verde
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),  -- 0.5: Ciano
+        ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),   -- 0.67: Azul
+        ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)), -- 0.83: Magenta
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))       -- 1: Vermelho (loop)
+    })
+    HueGradient.Parent = HueBar
+    
+    local HCursor = Instance.new("Frame")
+    HCursor.Parent = HueBar
+    HCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    HCursor.BackgroundTransparency = 1
+    HCursor.Size = UDim2.new(1, 0, 0, 3)
+    HCursor.ZIndex = 2
+    
+    local HCursorCorner = Instance.new("UICorner")
+    HCursorCorner.CornerRadius = UDim.new(0, 4)
+    HCursorCorner.Parent = HCursor
+    
+    local HCursorStroke = Instance.new("UIStroke")
+    HCursorStroke.Parent = HCursor
+    HCursorStroke.Color = Color3.fromRGB(255, 255, 255)
+    HCursorStroke.Thickness = 1
+    
+    local H, S, V = Default:ToHSV()
+    local Opened = false
+    local LastColor = nil
+    local LastUpdate = 0
+    
+    -- Atualiza a cor de fundo do bloco S+B baseado no H atual
+    local function UpdateSatBrilhoBackground()
+        SatBrilhoImg.BackgroundColor3 = Color3.fromHSV(H, 1, 1)
+    end
+    
+    local function UpdateColor()
+        local now = tick()
+        if now - LastUpdate < 1/60 then return end
+        LastUpdate = now
+        local color = Color3.fromHSV(H, S, V)
+        if color == LastColor then return end
+        LastColor = color
+        ColorDisplay.BackgroundColor3 = color
+        UpdateSatBrilhoBackground()
+        Library.Flags[Flag] = color
+        task.spawn(function() Callback(color) end)
+    end
+    
+    local function VisualUpdate(color, fromConfig)
+        if typeof(color) ~= "Color3" then return end
+        H, S, V = color:ToHSV()
+        ColorDisplay.BackgroundColor3 = color
+        UpdateSatBrilhoBackground()
+        -- H na barra lateral (vertical, 0 = topo = H=1, 1 = baixo = H=0)
+        HCursor.Position = UDim2.new(0, 0, 1 - H, -1)
+        -- S+B no bloco: X = Saturação, Y = Brilho (invertido)
+        SBCursor.Position = UDim2.new(S, -3, 1 - V, -3)
+        Library.Flags[Flag] = color
+        LastColor = color
+        
+        if fromConfig then
+            task.spawn(function()
+                pcall(Callback, color)
             end)
-            
-            HueSatImg.InputBegan:Connect(function(input)
-                if Library.IsDraggingWindow then return end
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    HSDragging = true
-                    Library.IsDraggingColorPicker = true
-                    SetAllScrollingEnabledFast(false)
-                end
-            end)
-            
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    if VDragging or HSDragging then
-                        VDragging = false
-                        HSDragging = false
-                        Library.IsDraggingColorPicker = false
-                        SetAllScrollingEnabledFast(true)
-                    end
-                end
-            end)
-            
-            RegisterInputConnection(function(input)
-                if VDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local y = math.clamp((input.Position.Y - ValueBar.AbsolutePosition.Y) / ValueBar.AbsoluteSize.Y, 0, 1)
-                    if math.abs(V - (1 - y)) > 0.001 then
-                        V = 1 - y
-                        VCursor.Position = UDim2.new(0, 0, y, -1)
-                        UpdateColor()
-                    end
-                elseif HSDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local x = math.clamp((input.Position.X - HueSatImg.AbsolutePosition.X) / HueSatImg.AbsoluteSize.X, 0, 1)
-                    local y = math.clamp((input.Position.Y - HueSatImg.AbsolutePosition.Y) / HueSatImg.AbsoluteSize.Y, 0, 1)
-                    if math.abs(H - x) > 0.001 or math.abs(S - (1 - y)) > 0.001 then
-                        H = x
-                        S = 1 - y
-                        SCursor.Position = UDim2.new(x, -3, y, -3)
-                        UpdateColor()
-                    end
-                end
-            end)
-            
-            VCursor.Position = UDim2.new(0, 0, 1 - V, -1)
-            SCursor.Position = UDim2.new(H, -3, 1 - S, -3)
-            UpdateColor()
-            table.insert(Library.Components.ColorPickers, { Flag = Flag, UpdateFn = VisualUpdate })
         end
+    end
+    
+    local function Toggle()
+        if Library.IsDraggingWindow or Library.IsDraggingColorPicker then return end
+        Opened = not Opened
+        Library:Tween(ColorPickerFrame, {Size = Opened and UDim2.new(0, 194, 0, 184) or UDim2.new(0, 194, 0, 34)})
+    end
+    
+    local HeaderButton = Instance.new("TextButton")
+    HeaderButton.Name = "HeaderButton"
+    HeaderButton.Parent = ColorPickerFrame
+    HeaderButton.BackgroundTransparency = 1
+    HeaderButton.Size = UDim2.new(1, 0, 0, 34)
+    HeaderButton.Text = ""
+    HeaderButton.ZIndex = 5
+    HeaderButton.Activated:Connect(Toggle)
+    
+    local HDragging, SBDragging = false, false
+    
+    -- Hue Bar (Barra lateral)
+    HueBar.InputBegan:Connect(function(input)
+        if Library.IsDraggingWindow then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            HDragging = true
+            Library.IsDraggingColorPicker = true
+            SetAllScrollingEnabledFast(false)
+        end
+    end)
+    
+    -- Sat/Brilho (Bloco do meio)
+    SatBrilhoImg.InputBegan:Connect(function(input)
+        if Library.IsDraggingWindow then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            SBDragging = true
+            Library.IsDraggingColorPicker = true
+            SetAllScrollingEnabledFast(false)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if HDragging or SBDragging then
+                HDragging = false
+                SBDragging = false
+                Library.IsDraggingColorPicker = false
+                SetAllScrollingEnabledFast(true)
+            end
+        end
+    end)
+    
+    RegisterInputConnection(function(input)
+        if HDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            -- H na barra: Y vai de 0 (topo) a 1 (baixo) -> H = 1 - Y
+            local y = math.clamp((input.Position.Y - HueBar.AbsolutePosition.Y) / HueBar.AbsoluteSize.Y, 0, 1)
+            if math.abs(H - (1 - y)) > 0.001 then
+                H = 1 - y
+                HCursor.Position = UDim2.new(0, 0, y, -1)
+                UpdateColor()
+            end
+        elseif SBDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            -- S+B: X = Saturação, Y = Brilho (invertido: Y=0 = V=1)
+            local x = math.clamp((input.Position.X - SatBrilhoImg.AbsolutePosition.X) / SatBrilhoImg.AbsoluteSize.X, 0, 1)
+            local y = math.clamp((input.Position.Y - SatBrilhoImg.AbsolutePosition.Y) / SatBrilhoImg.AbsoluteSize.Y, 0, 1)
+            if math.abs(S - x) > 0.001 or math.abs(V - (1 - y)) > 0.001 then
+                S = x
+                V = 1 - y
+                SBCursor.Position = UDim2.new(x, -3, y, -3)
+                UpdateColor()
+            end
+        end
+    end)
+    
+    -- Posições iniciais
+    UpdateSatBrilhoBackground()
+    HCursor.Position = UDim2.new(0, 0, 1 - H, -1)
+    SBCursor.Position = UDim2.new(S, -3, 1 - V, -3)
+    UpdateColor()
+    
+    table.insert(Library.Components.ColorPickers, { Flag = Flag, UpdateFn = VisualUpdate })
+end
         
         function Tab:AddMultiColorPicker(mcpOptions)
             local Text = mcpOptions.Text or "Multi Color Picker"
