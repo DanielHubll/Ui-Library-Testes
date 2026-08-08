@@ -7,6 +7,9 @@
 -- FIX: Todas as barras de scroll removidas (ScrollBarThickness = 0)
 -- NOVO: Sistema de Configuração com Tab automática e Datastore
 -- NOVO: Sistema de cores personalizáveis para textos
+-- CORRIGIDO: Serialização de Color3 e EnumItem para JSON
+-- CORRIGIDO: Atualização de cores em tempo real
+-- CORRIGIDO: Sistema de arquivos local para persistência
 
 local Library = {
     Flags = {},
@@ -31,6 +34,7 @@ local Library = {
     ScrollFrames = {},
     OpenDropdowns = {},
     ConfigTab = nil, -- Referência para a tab de configuração
+    CurrentScreenGui = nil, -- Referência para o ScreenGui atual
 }
 
 local TweenService = game:GetService("TweenService")
@@ -39,38 +43,308 @@ local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
-local DataStoreService = game:GetService("DataStoreService")
 
--- Sistema de DataStore local
-local ConfigDataStore = {}
-local ConfigDataStoreName = "FFh4x_Config_Store"
+-- =========================================================
+-- CONFIG SYSTEM - JSON + LOCAL FILES
+-- =========================================================
 
--- Funções do DataStore Local
-local function SaveToDataStore(data)
-    ConfigDataStore = data
-    if setclipboard then
-        local json = HttpService:JSONEncode(data)
-        setclipboard(json)
+local ConfigFolder = "FFh4xConfigs"
+
+local function EnsureConfigFolder()
+    if makefolder and isfolder then
+        if not isfolder(ConfigFolder) then
+            pcall(function()
+                makefolder(ConfigFolder)
+            end)
+        end
     end
+end
+
+EnsureConfigFolder()
+
+local function SerializeValue(value)
+    local valueType = typeof(value)
+
+    if valueType == "Color3" then
+        return {
+            __type = "Color3",
+            R = value.R,
+            G = value.G,
+            B = value.B
+        }
+
+    elseif valueType == "EnumItem" then
+        return {
+            __type = "EnumItem",
+            EnumType = tostring(value.EnumType),
+            Name = value.Name
+        }
+
+    elseif valueType == "table" then
+        local result = {}
+
+        for k, v in pairs(value) do
+            local serialized = SerializeValue(v)
+
+            if serialized ~= nil then
+                result[tostring(k)] = serialized
+            end
+        end
+
+        return result
+
+    elseif valueType == "string"
+        or valueType == "number"
+        or valueType == "boolean" then
+
+        return value
+
+    elseif value == nil then
+        return nil
+    end
+
+    -- Player/Instance/function/etc não deve quebrar o JSON
+    return nil
+end
+
+local function DeserializeValue(value)
+    if type(value) ~= "table" then
+        return value
+    end
+
+    if value.__type == "Color3" then
+        return Color3.new(
+            tonumber(value.R) or 1,
+            tonumber(value.G) or 1,
+            tonumber(value.B) or 1
+        )
+
+    elseif value.__type == "EnumItem" then
+        local enumName = tostring(value.EnumType or ""):gsub("Enum%.", "")
+        local enumObject = Enum[enumName]
+
+        if enumObject then
+            local success, enumItem = pcall(function()
+                return enumObject[value.Name]
+            end)
+
+            if success then
+                return enumItem
+            end
+        end
+
+        return nil
+    end
+
+    local result = {}
+
+    for k, v in pairs(value) do
+        result[k] = DeserializeValue(v)
+    end
+
+    return result
+end
+
+local function EncodeConfig(data)
+    local serialized = SerializeValue(data)
+
+    local success, json = pcall(function()
+        return HttpService:JSONEncode(serialized)
+    end)
+
+    if success then
+        return json
+    end
+
+    warn("FFh4x: Erro ao converter config para JSON:", json)
+    return "{}"
+end
+
+local function DecodeConfig(json)
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(json)
+    end)
+
+    if not success or type(data) ~= "table" then
+        return nil
+    end
+
+    return DeserializeValue(data)
+end
+
+local function GetConfigPath(name)
+    name = tostring(name or "")
+
+    -- evita caracteres inválidos no nome
+    name = name:gsub("[^%w_%-%s]", "")
+    name = name:gsub("^%s+", "")
+    name = name:gsub("%s+$", "")
+
+    if name == "" then
+        return nil
+    end
+
+    return ConfigFolder .. "/" .. name .. ".json"
+end
+
+local function SaveLocalConfig(name, data)
+    if not writefile then
+        return false, "writefile não disponível"
+    end
+
+    EnsureConfigFolder()
+
+    local path = GetConfigPath(name)
+
+    if not path then
+        return false, "Nome inválido"
+    end
+
+    local json = EncodeConfig(data)
+
+    local success, err = pcall(function()
+        writefile(path, json)
+    end)
+
+    if not success then
+        return false, tostring(err)
+    end
+
+    return true
+end
+
+local function LoadLocalConfig(name)
+    if not readfile or not isfile then
+        return nil
+    end
+
+    local path = GetConfigPath(name)
+
+    if not path or not isfile(path) then
+        return nil
+    end
+
+    local success, content = pcall(function()
+        return readfile(path)
+    end)
+
+    if not success then
+        return nil
+    end
+
+    return DecodeConfig(content)
+end
+
+local function GetConfigNames()
+    local result = {}
+
+    if not listfiles then
+        return result
+    end
+
+    EnsureConfigFolder()
+
+    local success, files = pcall(function()
+        return listfiles(ConfigFolder)
+    end)
+
+    if not success or type(files) ~= "table" then
+        return result
+    end
+
+    for _, path in ipairs(files) do
+        local filename = tostring(path):match("([^/\\]+)%.json$")
+
+        if filename then
+            table.insert(result, filename)
+        end
+    end
+
+    table.sort(result)
+
+    return result
+end
+
+local function DeleteLocalConfig(name)
+    if not delfile then
+        return false
+    end
+
+    local path = GetConfigPath(name)
+
+    if not path or not isfile or not isfile(path) then
+        return false
+    end
+
+    return pcall(function()
+        delfile(path)
+    end)
+end
+
+-- Compatibilidade com o sistema antigo
+local ConfigDataStore = {}
+
+local function SaveToDataStore(data)
+    ConfigDataStore = SerializeValue(data)
 end
 
 local function LoadFromDataStore()
-    return ConfigDataStore
+    return DeserializeValue(ConfigDataStore)
 end
 
 local function ExportConfigJSON()
-    return HttpService:JSONEncode(ConfigDataStore)
+    return EncodeConfig(Library.Flags)
 end
 
 local function ImportConfigJSON(jsonString)
-    local success, data = pcall(function()
-        return HttpService:JSONDecode(jsonString)
-    end)
-    if success then
+    local data = DecodeConfig(jsonString)
+
+    if data then
         ConfigDataStore = data
-        return true
+        return true, data
     end
+
     return false
+end
+
+-- =========================================================
+-- SISTEMA DE CORES EM TEMPO REAL
+-- =========================================================
+
+local function SetTextRole(object, role)
+    if object and (object:IsA("TextLabel")
+        or object:IsA("TextButton")
+        or object:IsA("TextBox")) then
+
+        object:SetAttribute("FFh4xTextRole", role)
+    end
+end
+
+local function ApplyThemeColors()
+    local gui = Library.CurrentScreenGui
+
+    if not gui then
+        return
+    end
+
+    for _, object in ipairs(gui:GetDescendants()) do
+        if object:IsA("TextLabel")
+            or object:IsA("TextButton")
+            or object:IsA("TextBox") then
+
+            local role = object:GetAttribute("FFh4xTextRole")
+
+            if role == "Section" then
+                object.TextColor3 = Library.Theme.SectionText
+
+            elseif role == "Primary" then
+                object.TextColor3 = Library.Theme.PrimaryText
+
+            elseif role == "Secondary" then
+                object.TextColor3 = Library.Theme.SecondaryTextColor
+            end
+        end
+    end
 end
 
 local InputChangedConnections = {}
@@ -195,6 +469,9 @@ function Library:CreateWindow(options)
     ScreenGui.Name = "FFh4xGui_" .. HttpService:GenerateGUID(false)  
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling  
     ScreenGui.Parent = RunService:IsStudio() and game.Players.LocalPlayer.PlayerGui or game:GetService("CoreGui")  
+
+    -- Guarda referência do ScreenGui
+    Library.CurrentScreenGui = ScreenGui
 
     local Painel = Instance.new("Frame")  
     Painel.Name = "Painel"  
@@ -490,7 +767,8 @@ function Library:CreateWindow(options)
             TextButton.BorderSizePixel = 0  
             TextButton.Size = UDim2.new(1, 0, 1, 0)  
             TextButton.Text = Text  
-            TextButton.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            TextButton.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(TextButton, "Primary")
             TextButton.TextSize = 15  
             TextButton.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
 
@@ -537,7 +815,8 @@ function Library:CreateWindow(options)
             Title.Position = UDim2.new(0, 10, 0, 10)  
             Title.Size = UDim2.new(0, 100, 0, 20)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            Title.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(Title, "Primary")
             Title.TextSize = 14  
             Title.TextScaled = true  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
@@ -631,125 +910,180 @@ function Library:CreateWindow(options)
         end  
 
         function Tab:AddDropdown(drpOptions)  
-    local Text = drpOptions.Text or "Dropdown"  
-    local List = drpOptions.List or {}  
-    local Default = drpOptions.Default or nil
-    local Side = drpOptions.Side or "Main1"  
-    local Callback = drpOptions.Callback or function() end  
-    local Flag = drpOptions.Flag or Text  
-    local targetMain = self:GetMain(Side)  
+            local Text = drpOptions.Text or "Dropdown"  
+            local List = drpOptions.List or {}  
+            local Default = drpOptions.Default or nil
+            local Side = drpOptions.Side or "Main1"  
+            local Callback = drpOptions.Callback or function() end  
+            local Flag = drpOptions.Flag or Text  
+            local targetMain = self:GetMain(Side)  
 
-    local DropdownFrame = Instance.new("Frame")  
-    DropdownFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)  
-    DropdownFrame.Size = UDim2.new(0, 194, 0, 34)  
-    DropdownFrame.ClipsDescendants = true  
-    DropdownFrame.Parent = targetMain  
-    local DCorner = Instance.new("UICorner"); DCorner.Parent = DropdownFrame  
+            local DropdownFrame = Instance.new("Frame")  
+            DropdownFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)  
+            DropdownFrame.Size = UDim2.new(0, 194, 0, 34)  
+            DropdownFrame.ClipsDescendants = true  
+            DropdownFrame.Parent = targetMain  
+            local DCorner = Instance.new("UICorner"); DCorner.Parent = DropdownFrame  
 
-    local Title = Instance.new("TextLabel")  
-    Title.Parent = DropdownFrame  
-    Title.BackgroundTransparency = 1  
-    Title.Position = UDim2.new(0, 10, 0, 0)  
-    Title.Size = UDim2.new(1, -40, 0, 34)  
-    Title.Text = Text  
-    Title.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
-    Title.TextSize = 14  
-    Title.TextXAlignment = Enum.TextXAlignment.Left  
-    Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
+            local Title = Instance.new("TextLabel")  
+            Title.Parent = DropdownFrame  
+            Title.BackgroundTransparency = 1  
+            Title.Position = UDim2.new(0, 10, 0, 0)  
+            Title.Size = UDim2.new(1, -40, 0, 34)  
+            Title.Text = Text  
+            Title.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(Title, "Primary")
+            Title.TextSize = 14  
+            Title.TextXAlignment = Enum.TextXAlignment.Left  
+            Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
 
-    local Arrow = Instance.new("ImageLabel")  
-    Arrow.Parent = DropdownFrame  
-    Arrow.BackgroundTransparency = 1  
-    Arrow.Position = UDim2.new(1, -30, 0, 7)  
-    Arrow.Size = UDim2.new(0, 20, 0, 20)  
-    Arrow.Image = "rbxassetid://6034818372"  
+            local Arrow = Instance.new("ImageLabel")  
+            Arrow.Parent = DropdownFrame  
+            Arrow.BackgroundTransparency = 1  
+            Arrow.Position = UDim2.new(1, -30, 0, 7)  
+            Arrow.Size = UDim2.new(0, 20, 0, 20)  
+            Arrow.Image = "rbxassetid://6034818372"  
 
-    local ListFrame = Instance.new("Frame")  
-    ListFrame.Parent = DropdownFrame  
-    ListFrame.BackgroundTransparency = 1  
-    ListFrame.Position = UDim2.new(0, 0, 0, 34)  
-    ListFrame.Size = UDim2.new(1, 0, 0, #List * 30)  
-    local ListLayout = Instance.new("UIListLayout"); ListLayout.Parent = ListFrame  
+            local ListFrame = Instance.new("Frame")  
+            ListFrame.Parent = DropdownFrame  
+            ListFrame.BackgroundTransparency = 1  
+            ListFrame.Position = UDim2.new(0, 0, 0, 34)  
+            ListFrame.Size = UDim2.new(1, 0, 0, #List * 30)  
+            local ListLayout = Instance.new("UIListLayout"); ListLayout.Parent = ListFrame  
 
-    local DropdownData = {  
-        Opened = false,  
-        Frame = DropdownFrame,  
-        Arrow = Arrow,  
-        ClosedSize = UDim2.new(0, 194, 0, 34)  
-    }  
+            local DropdownData = {  
+                Opened = false,  
+                Frame = DropdownFrame,  
+                Arrow = Arrow,  
+                ClosedSize = UDim2.new(0, 194, 0, 34)  
+            }  
 
-    local function SetDefault(value)
-        if value then
-            local found = false
-            for _, item in ipairs(List) do
-                if tostring(item) == tostring(value) then
-                    found = true
-                    break
+            local function SetDefault(value)
+                if value then
+                    local found = false
+                    for _, item in ipairs(List) do
+                        if tostring(item) == tostring(value) then
+                            found = true
+                            break
+                        end
+                    end
+                    
+                    if found then
+                        Title.Text = Text .. ": " .. tostring(value)
+                        Library.Flags[Flag] = value
+                    end
                 end
             end
-            
-            if found then
-                Title.Text = Text .. ": " .. tostring(value)
-                Library.Flags[Flag] = value
+
+            if Default ~= nil then
+                SetDefault(Default)
             end
-        end
-    end
 
-    if Default ~= nil then
-        SetDefault(Default)
-    end
+            local function Toggle()  
+                if Library.IsDraggingWindow then return end  
+                DropdownData.Opened = not DropdownData.Opened  
 
-    local function Toggle()  
-        if Library.IsDraggingWindow then return end  
-        DropdownData.Opened = not DropdownData.Opened  
-
-        if DropdownData.Opened then  
-            RegisterOpenDropdown(DropdownData)  
-        else  
-            for i, d in ipairs(Library.OpenDropdowns) do  
-                if d == DropdownData then  
-                    table.remove(Library.OpenDropdowns, i)  
-                    break  
+                if DropdownData.Opened then  
+                    RegisterOpenDropdown(DropdownData)  
+                else  
+                    for i, d in ipairs(Library.OpenDropdowns) do  
+                        if d == DropdownData then  
+                            table.remove(Library.OpenDropdowns, i)  
+                            break  
+                        end  
+                    end  
                 end  
+
+                local targetSize = DropdownData.Opened and UDim2.new(0, 194, 0, 34 + (#List * 30)) or UDim2.new(0, 194, 0, 34)  
+                Library:Tween(DropdownFrame, {Size = targetSize})  
+                Library:Tween(Arrow, {Rotation = DropdownData.Opened and 180 or 0})  
             end  
-        end  
 
-        local targetSize = DropdownData.Opened and UDim2.new(0, 194, 0, 34 + (#List * 30)) or UDim2.new(0, 194, 0, 34)  
-        Library:Tween(DropdownFrame, {Size = targetSize})  
-        Library:Tween(Arrow, {Rotation = DropdownData.Opened and 180 or 0})  
-    end  
+            DropdownFrame.InputBegan:Connect(function(input)  
+                if Library.IsDraggingWindow then return end  
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then Toggle() end  
+            end)  
 
-    DropdownFrame.InputBegan:Connect(function(input)  
-        if Library.IsDraggingWindow then return end  
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then Toggle() end  
-    end)  
+            for _, v in pairs(List) do  
+                local Item = Instance.new("TextButton")  
+                Item.Parent = ListFrame  
+                Item.BackgroundColor3 = Color3.fromRGB(45, 45, 45)  
+                Item.BorderSizePixel = 0  
+                Item.Size = UDim2.new(1, 0, 0, 30)  
+                Item.Text = tostring(v)  
+                Item.TextColor3 = Library.Theme.PrimaryText
+                SetTextRole(Item, "Primary")
+                Item.TextSize = 13  
+                Item.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
+                Item.MouseButton1Click:Connect(function()  
+                    if Library.IsDraggingWindow then return end  
+                    Title.Text = Text .. ": " .. tostring(v)  
+                    Library.Flags[Flag] = v  
+                    task.spawn(function() Callback(v) end)  
+                    Toggle()  
+                end)  
+                Item.TouchTap:Connect(function()  
+                    if Library.IsDraggingWindow then return end  
+                    Title.Text = Text .. ": " .. tostring(v)  
+                    Library.Flags[Flag] = v  
+                    task.spawn(function() Callback(v) end)  
+                    Toggle()  
+                end)  
+            end
 
-    for _, v in pairs(List) do  
-        local Item = Instance.new("TextButton")  
-        Item.Parent = ListFrame  
-        Item.BackgroundColor3 = Color3.fromRGB(45, 45, 45)  
-        Item.BorderSizePixel = 0  
-        Item.Size = UDim2.new(1, 0, 0, 30)  
-        Item.Text = tostring(v)  
-        Item.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
-        Item.TextSize = 13  
-        Item.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
-        Item.MouseButton1Click:Connect(function()  
-            if Library.IsDraggingWindow then return end  
-            Title.Text = Text .. ": " .. tostring(v)  
-            Library.Flags[Flag] = v  
-            task.spawn(function() Callback(v) end)  
-            Toggle()  
-        end)  
-        Item.TouchTap:Connect(function()  
-            if Library.IsDraggingWindow then return end  
-            Title.Text = Text .. ": " .. tostring(v)  
-            Library.Flags[Flag] = v  
-            task.spawn(function() Callback(v) end)  
-            Toggle()  
-        end)  
-    end  
-end
+            -- Retorna o objeto com SetList para atualizar o dropdown
+            local DropdownObject = {
+                SetList = function(_, newList)
+                    List = newList or {}
+
+                    -- Limpa os itens existentes
+                    for _, child in ipairs(ListFrame:GetChildren()) do
+                        if child:IsA("TextButton") then
+                            child:Destroy()
+                        end
+                    end
+
+                    -- Atualiza o tamanho do frame
+                    ListFrame.Size = UDim2.new(1, 0, 0, #List * 30)
+
+                    -- Recria os itens
+                    for _, v in ipairs(List) do
+                        local Item = Instance.new("TextButton")
+                        Item.Parent = ListFrame
+                        Item.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+                        Item.BorderSizePixel = 0
+                        Item.Size = UDim2.new(1, 0, 0, 30)
+                        Item.Text = tostring(v)
+                        Item.TextColor3 = Library.Theme.PrimaryText
+                        SetTextRole(Item, "Primary")
+                        Item.TextSize = 13
+                        Item.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")
+                        
+                        Item.MouseButton1Click:Connect(function()
+                            if Library.IsDraggingWindow then return end
+                            Title.Text = Text .. ": " .. tostring(v)
+                            Library.Flags[Flag] = v
+                            task.spawn(function() Callback(v) end)
+                            Toggle()
+                        end)
+                        
+                        Item.TouchTap:Connect(function()
+                            if Library.IsDraggingWindow then return end
+                            Title.Text = Text .. ": " .. tostring(v)
+                            Library.Flags[Flag] = v
+                            task.spawn(function() Callback(v) end)
+                            Toggle()
+                        end)
+                    end
+                end,
+
+                GetValue = function()
+                    return Library.Flags[Flag]
+                end
+            }
+
+            return DropdownObject
+        end
 
         function Tab:AddTextbox(txtOptions)  
             local Text = txtOptions.Text or "Textbox"  
@@ -771,7 +1105,8 @@ end
             Title.Position = UDim2.new(0, 10, 0, 5)  
             Title.Size = UDim2.new(1, -20, 0, 15)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            Title.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(Title, "Primary")
             Title.TextSize = 12  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
@@ -818,7 +1153,8 @@ end
             ContentLabel.Position = UDim2.new(0, 10, 0, 25)  
             ContentLabel.Size = UDim2.new(1, -20, 0, 30)  
             ContentLabel.Text = Content  
-            ContentLabel.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            ContentLabel.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(ContentLabel, "Primary")
             ContentLabel.TextSize = 12  
             ContentLabel.TextXAlignment = Enum.TextXAlignment.Left  
             ContentLabel.TextYAlignment = Enum.TextYAlignment.Top  
@@ -843,7 +1179,8 @@ end
             Title.BackgroundTransparency = 1  
             Title.Size = UDim2.new(1, 0, 1, 0)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.SectionText -- Usando Section Text
+            Title.TextColor3 = Library.Theme.SectionText
+            SetTextRole(Title, "Section")
             Title.TextSize = 15  
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
             Title.TextWrapped = true  
@@ -884,7 +1221,8 @@ end
             Title.Position = UDim2.new(0, 46, 0, 0)  
             Title.Size = UDim2.new(0, 136, 0, 36)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            Title.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(Title, "Primary")
             Title.TextSize = 16  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
@@ -944,7 +1282,8 @@ end
             Title.Position = UDim2.new(0, 10, 0, 10)  
             Title.Size = UDim2.new(1, -90, 0, 14)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            Title.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(Title, "Primary")
             Title.TextSize = 14  
             Title.TextScaled = true  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
@@ -1017,7 +1356,8 @@ end
             Title.BackgroundTransparency = 1  
             Title.Size = UDim2.new(1, 0, 1, 0)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            Title.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(Title, "Primary")
             Title.TextSize = 14  
             Title.TextScaled = true  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
@@ -1046,7 +1386,8 @@ end
             Title.Position = UDim2.new(0, 10, 0, 5)  
             Title.Size = UDim2.new(1, -20, 0, 20)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.SecondaryTextColor -- Usando Secondary Text Color
+            Title.TextColor3 = Library.Theme.SecondaryTextColor
+            SetTextRole(Title, "Secondary")
             Title.TextSize = 14  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Bold)  
@@ -1134,7 +1475,8 @@ end
                 NameLabel.Position = UDim2.new(0, 40, 0, 0)  
                 NameLabel.Size = UDim2.new(1, -45, 1, 0)  
                 NameLabel.Text = player.DisplayName or player.Name  
-                NameLabel.TextColor3 = Library.Theme.SecondaryTextColor -- Usando Secondary Text Color
+                NameLabel.TextColor3 = Library.Theme.SecondaryTextColor
+                SetTextRole(NameLabel, "Secondary")
                 NameLabel.TextSize = 14  
                 NameLabel.TextXAlignment = Enum.TextXAlignment.Left  
                 NameLabel.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
@@ -1204,7 +1546,8 @@ end
             Title.Position = UDim2.new(0, 10, 0, 5)  
             Title.Size = UDim2.new(1, -70, 0, 20)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.SecondaryTextColor -- Usando Secondary Text Color
+            Title.TextColor3 = Library.Theme.SecondaryTextColor
+            SetTextRole(Title, "Secondary")
             Title.TextSize = 14  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Bold)  
@@ -1215,7 +1558,8 @@ end
             TypeBtn.Position = UDim2.new(1, -55, 0, 5)  
             TypeBtn.Size = UDim2.new(0, 45, 0, 20)  
             TypeBtn.Text = CurrentType  
-            TypeBtn.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            TypeBtn.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(TypeBtn, "Primary")
             TypeBtn.TextSize = 12  
             TypeBtn.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
             local TBCorner = Instance.new("UICorner"); TBCorner.CornerRadius = UDim.new(0, 4); TBCorner.Parent = TypeBtn  
@@ -1348,7 +1692,8 @@ end
             Title.Position = UDim2.new(0, 10, 0, 0)  
             Title.Size = UDim2.new(1, -60, 0, 34)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            Title.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(Title, "Primary")
             Title.TextSize = 14  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
@@ -1533,7 +1878,8 @@ end
             Title.Position = UDim2.new(0, 10, 0, 0)  
             Title.Size = UDim2.new(1, -40, 0, 34)  
             Title.Text = Text  
-            Title.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+            Title.TextColor3 = Library.Theme.PrimaryText
+            SetTextRole(Title, "Primary")
             Title.TextSize = 14  
             Title.TextXAlignment = Enum.TextXAlignment.Left  
             Title.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
@@ -1544,7 +1890,6 @@ end
             Arrow.Position = UDim2.new(1, -30, 0, 7)  
             Arrow.Size = UDim2.new(0, 20, 0, 20)  
             Arrow.Image = "rbxassetid://6034818372"  
-            local SCorner = Instance.new("UICorner"); SCorner.Parent = Arrow  
 
             local ListFrame = Instance.new("Frame")  
             ListFrame.Parent = MultiCPFrame  
@@ -1594,7 +1939,8 @@ end
                 ItemTitle.Position = UDim2.new(0, 10, 0, 0)  
                 ItemTitle.Size = UDim2.new(1, -40, 0, 34)  
                 ItemTitle.Text = cText  
-                ItemTitle.TextColor3 = Library.Theme.PrimaryText -- Usando Primary Text
+                ItemTitle.TextColor3 = Library.Theme.PrimaryText
+                SetTextRole(ItemTitle, "Primary")
                 ItemTitle.TextSize = 13  
                 ItemTitle.TextXAlignment = Enum.TextXAlignment.Left  
                 ItemTitle.FontFace = Font.new("rbxasset://fonts/families/Ubuntu.json")  
@@ -1630,7 +1976,6 @@ end
                         PWHueSat.Size = UDim2.new(0, 140, 0, 130)  
                         PWHueSat.Image = "rbxassetid://73194550500215"  
                         PWHueSat.ZIndex = 11  
-                        local SCorner = Instance.new("UICorner"); SCorner.Parent = PWHueSat  
 
                         local PWSCursor = Instance.new("Frame")  
                         PWSCursor.Parent = PWHueSat  
@@ -1643,7 +1988,6 @@ end
                         PWValue.Position = UDim2.new(0, 160, 0, 10)  
                         PWValue.Size = UDim2.new(0, 15, 0, 130)  
                         PWValue.ZIndex = 11  
-                        local SCorner = Instance.new("UICorner"); SCorner.Parent = PWValue  
                         local PWVGradient = Instance.new("UIGradient")  
                         PWVGradient.Rotation = 90  
                         PWVGradient.Parent = PWValue  
@@ -1653,15 +1997,6 @@ end
                         PWVCursor.BackgroundTransparency = 1  
                         PWVCursor.Size = UDim2.new(1, 0, 0, 3)  
                         PWVCursor.ZIndex = 12  
-
-                        local PWVCursorCorner = Instance.new("UICorner")  
-                        PWVCursorCorner.CornerRadius = UDim.new(0, 4)  
-                        PWVCursorCorner.Parent = PWVCursor  
-
-                        local PWVCursorStroke = Instance.new("UIStroke")  
-                        PWVCursorStroke.Parent = PWVCursor  
-                        PWVCursorStroke.Color = Color3.fromRGB(255, 255, 255)  
-                        PWVCursorStroke.Thickness = 1  
 
                         local pH, pS, pV = SelectedColors[cFlag]:ToHSV()  
                         local pLastColor = nil  
@@ -1761,24 +2096,26 @@ end
         return Tab  
     end  
 
-    -- ========== SISTEMA DE CONFIGURAÇÃO ==========  
+    -- =========================================================
+    -- SISTEMA DE CONFIGURAÇÃO
+    -- =========================================================
 
-    -- Criar a Tab de Configuração automaticamente (última tab)
     local ConfigTab = Window:CreateTab({
         Name = "Config",
-        Icon = "rbxassetid://114459453255031" -- Você pode mudar o ícone depois
+        Icon = "rbxassetid://114459453255031"
     })
 
-    -- Armazenar referência da tab de config
     Library.ConfigTab = ConfigTab
 
-    -- Configurar a tab de configuração
-    local ConfigMain = ConfigTab:GetMain("Main1")
+    -- =========================================================
+    -- MAIN 1 - SOMENTE CORES
+    -- =========================================================
 
-    -- Seção de Cores
-    ConfigTab:AddSection({Text = "Cores do Tema", Side = "Main1"})
+    ConfigTab:AddSection({
+        Text = "Cores do Tema",
+        Side = "Main1"
+    })
 
-    -- ColorPicker para Section Text
     ConfigTab:AddColorPicker({
         Text = "Section Text",
         Default = Library.Theme.SectionText,
@@ -1786,10 +2123,10 @@ end
         Flag = "Config_SectionText",
         Callback = function(color)
             Library.Theme.SectionText = color
+            ApplyThemeColors()
         end
     })
 
-    -- ColorPicker para Primary Text
     ConfigTab:AddColorPicker({
         Text = "Primary Text",
         Default = Library.Theme.PrimaryText,
@@ -1797,10 +2134,10 @@ end
         Flag = "Config_PrimaryText",
         Callback = function(color)
             Library.Theme.PrimaryText = color
+            ApplyThemeColors()
         end
     })
 
-    -- ColorPicker para Secondary Text
     ConfigTab:AddColorPicker({
         Text = "Secondary Text",
         Default = Library.Theme.SecondaryTextColor,
@@ -1808,91 +2145,272 @@ end
         Flag = "Config_SecondaryText",
         Callback = function(color)
             Library.Theme.SecondaryTextColor = color
+            ApplyThemeColors()
         end
     })
 
-    -- Separador
     ConfigTab:AddSeparator("Main1")
 
-    -- Seção de DataStore/Save
-    ConfigTab:AddSection({Text = "Salvar/Carregar Config", Side = "Main1"})
+    ConfigTab:AddColorPicker({
+        Text = "Accent",
+        Default = Library.Theme.Accent,
+        Side = "Main1",
+        Flag = "Config_Accent",
+        Callback = function(color)
+            Library.Theme.Accent = color
+            -- Atualiza tudo que usa Accent
+            for _, object in ipairs(Library.CurrentScreenGui:GetDescendants()) do
+                if object:IsA("Frame") or object:IsA("TextButton") or object:IsA("TextLabel") then
+                    if object:GetAttribute("FFh4xAccent") then
+                        object.BackgroundColor3 = color
+                    end
+                    if object:GetAttribute("FFh4xAccentText") then
+                        object.TextColor3 = color
+                    end
+                end
+            end
+        end
+    })
 
-    -- Botão para Salvar Config
+    -- =========================================================
+    -- MAIN 2 - CONFIGURAÇÕES
+    -- =========================================================
+
+    ConfigTab:AddSection({
+        Text = "Configurações",
+        Side = "Main2"
+    })
+
+    local CurrentConfigName = ""
+
+    ConfigTab:AddTextbox({
+        Text = "Nome da Config",
+        Placeholder = "Digite o nome...",
+        Side = "Main2",
+        Flag = "ConfigName",
+        Callback = function(text)
+            CurrentConfigName = text
+        end
+    })
+
+    local ConfigDropdown
+    local function RefreshConfigDropdown()
+        local names = GetConfigNames()
+        if ConfigDropdown and ConfigDropdown.SetList then
+            ConfigDropdown:SetList(names)
+        end
+        return names
+    end
+
+    ConfigDropdown = ConfigTab:AddDropdown({
+        Text = "Configs Salvas",
+        List = GetConfigNames(),
+        Default = nil,
+        Side = "Main2",
+        Flag = "SelectedConfig",
+        Callback = function(name)
+            if name then
+                CurrentConfigName = tostring(name)
+            end
+        end
+    })
+
     ConfigTab:AddButton({
         Text = "Salvar Config",
-        Side = "Main1",
+        Side = "Main2",
         Callback = function()
-            SaveToDataStore(Library.Flags)
+            local name = tostring(CurrentConfigName or "")
+            if name:gsub("%s", "") == "" then
+                Window:Notify({
+                    Title = "Configuração",
+                    Content = "Digite um nome para a configuração!",
+                    Duration = 3
+                })
+                return
+            end
+
+            local success, err = SaveLocalConfig(name, Library.Flags)
+            if success then
+                Window:Notify({
+                    Title = "Configuração",
+                    Content = "Config '" .. name .. "' salva!",
+                    Duration = 3
+                })
+                RefreshConfigDropdown()
+            else
+                Window:Notify({
+                    Title = "Erro",
+                    Content = tostring(err),
+                    Duration = 3
+                })
+            end
+        end
+    })
+
+    ConfigTab:AddButton({
+        Text = "Carregar Config",
+        Side = "Main2",
+        Callback = function()
+            local name = tostring(CurrentConfigName or "")
+            if name:gsub("%s", "") == "" then
+                Window:Notify({
+                    Title = "Configuração",
+                    Content = "Selecione uma configuração!",
+                    Duration = 3
+                })
+                return
+            end
+
+            local data = LoadLocalConfig(name)
+            if not data then
+                Window:Notify({
+                    Title = "Configuração",
+                    Content = "Configuração não encontrada!",
+                    Duration = 3
+                })
+                return
+            end
+
+            for flag, value in pairs(data) do
+                Library.Flags[flag] = value
+            end
+
+            -- Aplica cores imediatamente
+            if Library.Flags.Config_SectionText then
+                Library.Theme.SectionText = Library.Flags.Config_SectionText
+            end
+            if Library.Flags.Config_PrimaryText then
+                Library.Theme.PrimaryText = Library.Flags.Config_PrimaryText
+            end
+            if Library.Flags.Config_SecondaryText then
+                Library.Theme.SecondaryTextColor = Library.Flags.Config_SecondaryText
+            end
+            if Library.Flags.Config_Accent then
+                Library.Theme.Accent = Library.Flags.Config_Accent
+            end
+
+            ApplyThemeColors()
+
             Window:Notify({
                 Title = "Configuração",
-                Content = "Configuração salva com sucesso!",
+                Content = "Config '" .. name .. "' carregada!",
                 Duration = 3
             })
         end
     })
 
-    -- Botão para Carregar Config
     ConfigTab:AddButton({
-        Text = "Carregar Config",
-        Side = "Main1",
+        Text = "Exportar JSON",
+        Side = "Main2",
         Callback = function()
-            local savedData = LoadFromDataStore()
-            if savedData and next(savedData) then
-                Library.Flags = savedData
+            local json = EncodeConfig(Library.Flags)
+            if setclipboard then
+                setclipboard(json)
                 Window:Notify({
-                    Title = "Configuração",
-                    Content = "Configuração carregada com sucesso!",
+                    Title = "JSON",
+                    Content = "JSON completo copiado!",
                     Duration = 3
                 })
             else
                 Window:Notify({
-                    Title = "Configuração",
-                    Content = "Nenhuma configuração salva encontrada!",
-                    Duration = 3
+                    Title = "JSON",
+                    Content = json,
+                    Duration = 8
                 })
             end
         end
     })
 
-    -- Botão para Exportar JSON
-    ConfigTab:AddButton({
-        Text = "Exportar JSON",
-        Side = "Main1",
-        Callback = function()
-            local json = ExportConfigJSON()
-            if setclipboard then
-                setclipboard(json)
-                Window:Notify({
-                    Title = "Configuração",
-                    Content = "JSON copiado para a área de transferência!",
-                    Duration = 3
-                })
-            end
-        end
-    })
-
-    -- Botão para Importar JSON
     ConfigTab:AddButton({
         Text = "Importar JSON",
-        Side = "Main1",
+        Side = "Main2",
         Callback = function()
-            -- Aqui você pode implementar um sistema para colar o JSON
-            -- Por enquanto, vamos tentar pegar do clipboard
-            if getclipboard then
-                local json = getclipboard()
-                if ImportConfigJSON(json) then
-                    Window:Notify({
-                        Title = "Configuração",
-                        Content = "JSON importado com sucesso!",
-                        Duration = 3
-                    })
-                else
-                    Window:Notify({
-                        Title = "Erro",
-                        Content = "JSON inválido na área de transferência!",
-                        Duration = 3
-                    })
-                end
+            if not getclipboard then
+                Window:Notify({
+                    Title = "Erro",
+                    Content = "getclipboard não disponível!",
+                    Duration = 3
+                })
+                return
+            end
+
+            local json = getclipboard()
+            if not json or json == "" then
+                Window:Notify({
+                    Title = "Erro",
+                    Content = "Clipboard vazio!",
+                    Duration = 3
+                })
+                return
+            end
+
+            local data = DecodeConfig(json)
+            if not data then
+                Window:Notify({
+                    Title = "Erro",
+                    Content = "JSON inválido!",
+                    Duration = 3
+                })
+                return
+            end
+
+            for flag, value in pairs(data) do
+                Library.Flags[flag] = value
+            end
+
+            -- Aplica cores imediatamente
+            if Library.Flags.Config_SectionText then
+                Library.Theme.SectionText = Library.Flags.Config_SectionText
+            end
+            if Library.Flags.Config_PrimaryText then
+                Library.Theme.PrimaryText = Library.Flags.Config_PrimaryText
+            end
+            if Library.Flags.Config_SecondaryText then
+                Library.Theme.SecondaryTextColor = Library.Flags.Config_SecondaryText
+            end
+            if Library.Flags.Config_Accent then
+                Library.Theme.Accent = Library.Flags.Config_Accent
+            end
+
+            ApplyThemeColors()
+
+            Window:Notify({
+                Title = "JSON",
+                Content = "JSON importado e aplicado!",
+                Duration = 3
+            })
+        end
+    })
+
+    ConfigTab:AddButton({
+        Text = "Excluir Config",
+        Side = "Main2",
+        Callback = function()
+            local name = tostring(CurrentConfigName or "")
+            if name:gsub("%s", "") == "" then
+                Window:Notify({
+                    Title = "Configuração",
+                    Content = "Selecione uma configuração!",
+                    Duration = 3
+                })
+                return
+            end
+
+            local success = DeleteLocalConfig(name)
+            if success then
+                Window:Notify({
+                    Title = "Configuração",
+                    Content = "Config '" .. name .. "' excluída!",
+                    Duration = 3
+                })
+                CurrentConfigName = ""
+                RefreshConfigDropdown()
+            else
+                Window:Notify({
+                    Title = "Erro",
+                    Content = "Não foi possível excluir!",
+                    Duration = 3
+                })
             end
         end
     })
@@ -1921,9 +2439,8 @@ function Library:SetTheme(newTheme)
     for i, v in pairs(newTheme) do if Library.Theme[i] then Library.Theme[i] = v end end
 end
 
--- Funções de Configuração Globais
 function Library:SaveConfig(name)
-    local json = HttpService:JSONEncode(Library.Flags)
+    local json = EncodeConfig(Library.Flags)
     if writefile then
         writefile(name .. ".json", json)
     end
@@ -1931,13 +2448,15 @@ function Library:SaveConfig(name)
 end
 
 function Library:LoadConfig(name)
-    if isfile and isfile(name .. ".json") then
-        local data = HttpService:JSONDecode(readfile(name .. ".json"))
+    local data = LoadLocalConfig(name)
+    if data then
         for i, v in pairs(data) do Library.Flags[i] = v end
+        ApplyThemeColors()
+        return true
     end
+    return false
 end
 
--- Funções de DataStore
 function Library:GetDataStore()
     return LoadFromDataStore()
 end
